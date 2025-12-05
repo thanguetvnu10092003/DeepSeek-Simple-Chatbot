@@ -1,0 +1,15 @@
+replicate
+langchain
+chromadb
+openai
+tiktoken
+pymupdf      # fitz
+python-dotenv
+requests
+datasets
+PyPDF2
+Pillow
+transformers
+sentence-transformers
+uvicorn      # nếu cần web
+fastapi      # nếu làm web
