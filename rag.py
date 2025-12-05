@@ -110,12 +110,12 @@ class LangChainPDFRAG:
         if not self.vectorstore:
             return "Chưa có tài liệu nào được thêm vào!", []
 
-        # BƯỚC 1: Phân loại câu hỏi bằng LLM
+        # Phân loại câu hỏi bằng LLM
         query_info = self.llm.classify_query(question)
 
         print(f"Query Analysis: {query_info}")  # Debug
 
-        # BƯỚC 2: Quyết định strategy dựa trên phân loại
+        # Quyết định strategy dựa trên phân loại
         query_type = query_info.get("type", "question")
         complexity = query_info.get("complexity", "medium")
         needs_detail = query_info.get("needs_detail", True)
@@ -128,12 +128,12 @@ class LangChainPDFRAG:
             k_value = 40
             chunks_per_file = 12
         elif query_type == "overview":
-            # Tổng quan → dùng small chunks, nhiều file
+            # Tổng quan: dùng small chunks, nhiều file
             active_vectorstore = self.vectorstore
             k_value = 60
             chunks_per_file = 10
         else:
-            # Câu hỏi thông thường → balanced
+            # Câu hỏi thông thường: balanced
             active_vectorstore = self.vectorstore
             k_value = 30
             chunks_per_file = 8
@@ -151,7 +151,7 @@ class LangChainPDFRAG:
                 file_groups[filename] = []
             file_groups[filename].append(doc)
 
-        # BƯỚC 3: Đảm bảo có sample từ tất cả file nếu cần
+        # Đảm bảo có sample từ tất cả file nếu cần
         if needs_all_files:
             all_files = self.get_all_files()
             for filename in all_files:
@@ -187,7 +187,7 @@ class LangChainPDFRAG:
 
         context = "\n\n---\n\n".join(context_parts)
 
-        # BƯỚC 4: Chọn prompt phù hợp với loại câu hỏi
+        # Chọn prompt phù hợp với loại câu hỏi
         if query_type == "exercise":
             prompt = ChatPromptTemplate.from_template(
                 "Bạn là giáo viên giỏi giải bài tập. Đọc KỸ TOÀN BỘ ngữ cảnh và trả lời CHI TIẾT.\n\n"

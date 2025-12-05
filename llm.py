@@ -58,9 +58,7 @@ Giải thích:
 - needs_all_files: có cần thông tin từ TẤT CẢ file không?
 - complexity: độ phức tạp câu hỏi
 - needs_detail: cần câu trả lời chi tiết hay tóm tắt?
-
-CHỈ TRẢ VỀ JSON"""
-                }],
+"""             }],
                 temperature=0.1,
                 max_tokens=150,
             )
