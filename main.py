@@ -113,7 +113,7 @@ def process_file(file, enable_ocr, rag_system, uploaded_files, progress=gr.Progr
 
         elif file_path.lower().endswith(('.png', '.jpg', '.jpeg')):
             if not enable_ocr:
-                return "**Không thể xử lý ảnh khi OCR bị tắt!**\n\nVui lòng bật 'Sử dụng OCR trả phí' để xử lý ảnh.", gr.update(), rag_system, uploaded_files
+                return "**Không thể xử lý ảnh khi OCR bị tắt!**\n\nVui lòng bật 'Sử dụng OCR trả phí' để xử lý ảnh.", gr.update(), rag_system, uploaded_files, gr.update()
 
             progress(0, desc="Đang OCR ảnh...")
 
@@ -156,14 +156,14 @@ def process_file(file, enable_ocr, rag_system, uploaded_files, progress=gr.Progr
 
             elapsed = time.time() - start_time
             result = f"**Đã OCR: {file_name}**\n\n"
-            result += f"Thời gian: **{elapsed:.2f}s**\n"
-            result += f"Số chunks: **{len(splits_small)}**\n"
-            result += f"**OCR được sử dụng:** 1 ảnh\n"
+            result += f"Thời gian: **{elapsed:.2f}s**\n\n"
+            result += f"Số chunks: **{len(splits_small)}**\n\n"
+            result += f"**OCR được sử dụng:** 1 ảnh\n\n"
             result += f"Chi phí API: ~$0.0010\n\n"
             result += "Bạn có thể chat về nội dung ảnh này!"
 
         else:
-            return "Chỉ hỗ trợ PDF, PNG, JPG!", gr.update(), rag_system, uploaded_files
+            return "Chỉ hỗ trợ PDF, PNG, JPG!", gr.update(), rag_system, uploaded_files, gr.update()
 
         # Build file list display with two sections
         all_db_files = rag_system.get_all_files()
