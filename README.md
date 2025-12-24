@@ -1,115 +1,91 @@
-# PDF RAG Chatbot - Smart Adaptive Retrieval
+# PDF RAG Chatbot với DeepSeek OCR
 
-A powerful chatbot that enables intelligent conversations with PDF documents and images using RAG (Retrieval-Augmented Generation) and DeepSeek OCR with adaptive retrieval strategies.
+Chatbot thông minh cho phép chat với tài liệu PDF và ảnh sử dụng RAG (Retrieval-Augmented Generation) và DeepSeek OCR.
 
-## ✨ Features
+## Tính năng
 
-- **🧠 LLM-based Query Classification** - Automatically classifies questions to optimize retrieval
-- **📊 Dual Vectorstore** - Uses two chunk sizes (500 & 1500) for different query types
-- **🎯 Adaptive Strategy** - Automatically selects the best retrieval strategy
-- **🔤 OCR Support** - Process scanned PDFs and images using DeepSeek OCR
-- **💰 Cost Optimization** - Optional OCR to minimize API costs
-- **🔄 Smart Caching** - Caches query classifications to reduce API calls
+- **Upload nhiều file** - Kéo thả nhiều file PDF/ảnh cùng lúc
+- **Phân loại query thông minh** - Tự động tối ưu retrieval dựa trên loại câu hỏi
+- **Dual Vectorstore** - Sử dụng 2 chunk sizes (500 & 1500) cho các loại query khác nhau
+- **Hybrid Search** - Kết hợp semantic search + BM25
+- **OCR Support** - Xử lý PDF scan và ảnh bằng DeepSeek OCR (Replicate)
+- **Multi-file Query** - Chọn 1 hoặc nhiều file cụ thể để hỏi
+- **Rate Limit Handling** - Tự động retry khi gặp rate limit từ Replicate API
+- **Duplicate Detection** - Tự động phát hiện và bỏ qua file trùng lặp
 
-## 🛠️ Installation
+## Cài đặt
 
-### Prerequisites
+### Yêu cầu
 - Python 3.10+
-- Conda (recommended) or pip
+- Conda hoặc pip
 
 ### Setup
 
-1. **Clone the repository**
+1. **Clone repository**
    ```bash
-   git clone <repository-url>
-   cd DeepSeek-OCR-Chatbot
+   git clone https://github.com/thanguetvnu10092003/DeepSeek-Simple-Chatbot.git
+   cd DeepSeek-Simple-Chatbot
    ```
 
-2. **Create environment**
+2. **Tạo environment**
    ```bash
-   # Using conda (recommended)
+   # Sử dụng conda
    conda env create -f environment.yaml
    conda activate chatbot
    
-   # Or using pip
+   # Hoặc sử dụng pip
    pip install -r requirements.txt
    ```
 
-3. **Configure API keys**
+3. **Cấu hình API keys**
    
-   Create a `.env` file in the project root:
+   Tạo file `.env`:
    ```env
-   GROQ_API_KEY=your_groq_api_key_here
-   REPLICATE_API_TOKEN=your_replicate_token_here
+   GROQ_API_KEY=your_groq_api_key
+   REPLICATE_API_TOKEN=your_replicate_token
    ```
 
-   - Get Groq API key: https://console.groq.com/
-   - Get Replicate token: https://replicate.com/account/api-tokens
+   - Groq API: https://console.groq.com/
+   - Replicate: https://replicate.com/account/api-tokens
 
-## 🚀 Usage
+## Sử dụng
 
-1. **Start the application**
+1. **Khởi động**
    ```bash
    python main.py
    ```
 
-2. **Open in browser**
-   Navigate to `http://127.0.0.1:7860`
+2. **Mở trình duyệt**: http://127.0.0.1:7860
 
-3. **Upload documents**
-   - Drag and drop PDF, PNG, or JPG files
-   - Enable OCR for scanned documents (costs ~$0.001/page)
+3. **Upload tài liệu**
+   - Kéo thả 1 hoặc nhiều file PDF/PNG/JPG
+   - Bật OCR cho PDF scan và ảnh (~$0.001/trang)
 
-4. **Start chatting**
-   - Ask questions about your documents
-   - The system automatically selects the best retrieval strategy
+4. **Chat**
+   - Chọn file cụ thể hoặc để trống để tìm tất cả
+   - Hỏi bất kỳ câu hỏi nào về tài liệu
 
-## 📁 Project Structure
+## Cấu trúc project
 
 ```
-├── main.py              # Gradio UI and main application
-├── rag.py               # RAG system with adaptive retrieval
-├── llm.py               # Groq LLM wrapper with caching
-├── pdf_ocr_loader.py    # PDF loading with OCR support
-├── requirements.txt     # Python dependencies
+├── main.py              # Gradio UI và xử lý upload
+├── rag.py               # RAG system với hybrid search
+├── llm.py               # Groq LLM wrapper
+├── pdf_ocr_loader.py    # PDF loader với OCR
+├── requirements.txt     # Dependencies
 ├── environment.yaml     # Conda environment
-└── .env                 # API keys (create this file)
+└── .env                 # API keys (tự tạo)
 ```
 
-## 🔧 Architecture
+## Chi phí
 
-### Query Classification
-The system uses LLM to classify queries into:
-- **Overview** - Summarize multiple files
-- **Specific** - Information from one file/topic
-- **Exercise** - Problem solving with detailed context
-- **Question** - General questions
+| Thao tác | Chi phí |
+|----------|---------|
+| PDF text | Miễn phí |
+| OCR/trang | ~$0.001 |
+| Ảnh OCR | ~$0.001 |
+| LLM (Groq) | Miễn phí |
 
-### Adaptive Retrieval
-Based on classification, the system adjusts:
-- Chunk size (500 or 1500 characters)
-- Number of retrieved chunks (30-60)
-- Prompt template optimization
-
-## 💰 Cost Estimation
-
-| Operation | Cost |
-|-----------|------|
-| Text PDF | Free (no OCR needed) |
-| OCR per page | ~$0.001 |
-| Image OCR | ~$0.001 |
-| LLM queries | Free (Groq) |
-
-## 🔒 Security Notes
-
-- Never commit `.env` file to git
-- API keys are excluded via `.gitignore`
-- Database files are stored locally and excluded from git
-
-## 📝 License
+## License
 
 MIT License
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
