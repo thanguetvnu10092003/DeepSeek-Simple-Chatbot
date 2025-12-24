@@ -54,154 +54,160 @@ def validate_file(file) -> tuple[bool, str]:
     return True, ""
 
 
-def process_file(file, enable_ocr, rag_system, uploaded_files, progress=gr.Progress()):
-    """Process uploaded file"""
-    # Validate file first
-    is_valid, error_message = validate_file(file)
-    if not is_valid:
-        return error_message, gr.update(), rag_system, uploaded_files, gr.update()
-
-    start_time = time.time()
-    file_path = file.name
-    file_name = Path(file_path).name
+def process_files(files, enable_ocr, rag_system, uploaded_files, progress=gr.Progress()):
+    """Process multiple uploaded files with OCR detection"""
+    if not files or len(files) == 0:
+        return "Vui lòng chọn ít nhất 1 file!", gr.update(), rag_system, uploaded_files, gr.update()
     
-    # Check for duplicate file
-    existing_files = rag_system.get_all_files()
-    if file_name in existing_files:
-        return f"**File đã tồn tại!**\n\nFile **{file_name}** đã được upload trước đó.\nVui lòng chọn file khác hoặc đổi tên file.", gr.update(), rag_system, uploaded_files, gr.update()
-
-    try:
-        if file_path.lower().endswith('.pdf'):
-            progress(0, desc="Bắt đầu phân tích PDF...")
-            num_chunks, ocr_pages, skipped_pages = rag_system.add_pdf(file_path, enable_ocr, progress)
-            elapsed = time.time() - start_time
-
-            if num_chunks == 0:
-                result = f"**Cảnh báo: {file_name}**\n\n"
-                result += f"Không có text được trích xuất!\n"
-                result += f"Trang bị bỏ qua: **{skipped_pages}** (PDF scan)\n\n"
-                result += f"**Giải pháp:**\n"
-                result += f"-Bật **'Sử dụng OCR trả phí'** để đọc PDF scan\n"
-                result += f"-Chi phí: ~${skipped_pages * 0.001:.4f}\n"
-                return result, gr.update(), rag_system, uploaded_files, gr.update()
-
-            uploaded_files.append({
-                "name": file_name,
-                "type": "PDF",
-                "chunks": num_chunks,
-                "ocr_used": ocr_pages > 0,
-                "ocr_pages": ocr_pages,
-                "skipped_pages": skipped_pages,
-                "time": datetime.now().strftime("%H:%M:%S")
-            })
-
-            result = f"**Đã xử lý: {file_name}**\n\n"
-            result += f"Số chunks (small): **{num_chunks}**\n"
-            result += f"Thời gian: **{elapsed:.2f}s**\n"
-
-            if ocr_pages > 0:
-                result += f"**OCR được sử dụng:** {ocr_pages} trang\n"
-                result += f"Chi phí API: ~${ocr_pages * 0.001:.4f}\n"
-
-            if skipped_pages > 0:
-                result += f"**Trang bị bỏ qua:** {skipped_pages} (PDF scan, OCR tắt)\n"
-
-            if ocr_pages == 0 and skipped_pages == 0:
-                result += f"**Không cần OCR** (PDF text thông thường) - MIỄN PHÍ \n"
-
-            result += "\nBạn có thể bắt đầu chat ngay bây giờ!"
-
-        elif file_path.lower().endswith(('.png', '.jpg', '.jpeg')):
-            if not enable_ocr:
-                return "**Không thể xử lý ảnh khi OCR bị tắt!**\n\nVui lòng bật 'Sử dụng OCR trả phí' để xử lý ảnh.", gr.update(), rag_system, uploaded_files, gr.update()
-
-            progress(0, desc="Đang OCR ảnh...")
-
-            with open(file_path, "rb") as f:
-                text = replicate.run(
-                    "lucataco/deepseek-ocr:cb3b474fbfc56b1664c8c7841550bccecbe7b74c30e45ce938ffca1180b4dff5",
-                    input={"image": f}
-                )
-
-            doc = Document(page_content=text, metadata={"filename": file_name, "type": "image"})
-            splits_small = rag_system.splitter_small.split_documents([doc])
-            splits_large = rag_system.splitter_large.split_documents([doc])
-
-            if not rag_system.vectorstore:
-                rag_system.vectorstore = Chroma.from_documents(
-                    splits_small, rag_system.embeddings,
-                    persist_directory=rag_system.persist_directory,
-                    collection_name="small_chunks"
-                )
-            else:
-                rag_system.vectorstore.add_documents(splits_small)
-
-            large_dir = rag_system.persist_directory + "_large"
-            if not rag_system.vectorstore_large:
-                rag_system.vectorstore_large = Chroma.from_documents(
-                    splits_large, rag_system.embeddings,
-                    persist_directory=large_dir,
-                    collection_name="large_chunks"
-                )
-            else:
-                rag_system.vectorstore_large.add_documents(splits_large)
-
-            uploaded_files.append({
-                "name": file_name,
-                "type": "Image",
-                "chunks": len(splits_small),
-                "ocr_used": True,
-                "time": datetime.now().strftime("%H:%M:%S")
-            })
-
-            elapsed = time.time() - start_time
-            result = f"**Đã OCR: {file_name}**\n\n"
-            result += f"Thời gian: **{elapsed:.2f}s**\n\n"
-            result += f"Số chunks: **{len(splits_small)}**\n\n"
-            result += f"**OCR được sử dụng:** 1 ảnh\n\n"
-            result += f"Chi phí API: ~$0.0010\n\n"
-            result += "Bạn có thể chat về nội dung ảnh này!"
-
-        else:
-            return "Chỉ hỗ trợ PDF, PNG, JPG!", gr.update(), rag_system, uploaded_files, gr.update()
-
-        # Build file list display with two sections
-        all_db_files = rag_system.get_all_files()
-        session_file_names = [f['name'] for f in uploaded_files]
-        existing_files = [f for f in all_db_files if f not in session_file_names]
+    if not isinstance(files, list):
+        files = [files]
+    
+    existing_db_files = rag_system.get_all_files()
+    results = []
+    skipped_duplicates = []
+    files_needing_ocr = []
+    total_processed = 0
+    
+    for idx, file in enumerate(files):
+        is_valid, error_message = validate_file(file)
+        if not is_valid:
+            results.append(f"[LOI] **{Path(file.name).name if file else 'Unknown'}** - Loi")
+            continue
         
-        file_list = ""
+        file_path = file.name
+        file_name = Path(file_path).name
         
-        # Section 1: Files uploaded in current session
-        if uploaded_files:
-            file_list += "### File vừa upload:\n\n"
-            for idx, f in enumerate(uploaded_files, 1):
-                file_list += f"**{idx}. {f['name']}** ({f['type']})\n"
-                file_list += f"   - {f['chunks']} chunks | {f['time']}\n"
-
-                if f.get("ocr_used") and f['type'] == 'PDF':
-                    file_list += f"   - OCR: {f.get('ocr_pages', 0)} trang\n"
-
-                if f.get('skipped_pages', 0) > 0:
-                    file_list += f"   - Bỏ qua: {f['skipped_pages']} trang\n"
-
-                file_list += "\n"
+        # Check for duplicate
+        if file_name in existing_db_files:
+            skipped_duplicates.append(file_name)
+            continue
         
-        # Section 2: Files already in database
-        if existing_files:
-            file_list += "### File đã có sẵn:\n\n"
-            for idx, fname in enumerate(existing_files, 1):
-                file_list += f"{idx}. {fname}\n\n"
-
-        # Build file choices for dropdown - get ALL files from database (includes old files)
-        all_db_files = rag_system.get_all_files()
+        # Check if image needs OCR but OCR is disabled
+        if file_path.lower().endswith(('.png', '.jpg', '.jpeg')) and not enable_ocr:
+            files_needing_ocr.append(file_name)
+            continue
         
-        # Multiselect: return file list as choices, empty as default value (= search all)
-        return result, gr.update(value=file_list), rag_system, uploaded_files, gr.update(choices=all_db_files, value=[])
-
-    except Exception as e:
-        logger.error(f"Error processing file: {e}")
-        return f"**Lỗi:** {str(e)}", gr.update(), rag_system, uploaded_files, gr.update()
+        start_time = time.time()
+        
+        try:
+            progress((idx / len(files)), desc=f"Xử lý {file_name} ({idx+1}/{len(files)})...")
+            
+            if file_path.lower().endswith('.pdf'):
+                num_chunks, ocr_pages, skipped_pages = rag_system.add_pdf(file_path, enable_ocr, progress)
+                elapsed = time.time() - start_time
+                
+                if num_chunks == 0:
+                    results.append(f"[CẢNH BÁO] **{file_name}** - Cần OCR ({skipped_pages} trang scan)")
+                else:
+                    uploaded_files.append({
+                        "name": file_name, "type": "PDF", "chunks": num_chunks,
+                        "ocr_used": ocr_pages > 0, "ocr_pages": ocr_pages,
+                        "skipped_pages": skipped_pages, "time": datetime.now().strftime("%H:%M:%S")
+                    })
+                    r = f"[OK] **{file_name}** - {num_chunks} chunks"
+                    if ocr_pages > 0:
+                        r += f" (OCR: {ocr_pages} trang)"
+                    r += f" [{elapsed:.1f}s]"
+                    results.append(r)
+                    total_processed += 1
+            
+            elif file_path.lower().endswith(('.png', '.jpg', '.jpeg')):
+                # Retry logic for rate limiting
+                max_retries = 3
+                for retry in range(max_retries):
+                    try:
+                        with open(file_path, "rb") as f:
+                            text = replicate.run(
+                                "lucataco/deepseek-ocr:cb3b474fbfc56b1664c8c7841550bccecbe7b74c30e45ce938ffca1180b4dff5",
+                                input={"image": f}
+                            )
+                        break  # Success, exit retry loop
+                    except Exception as api_error:
+                        if "429" in str(api_error) and retry < max_retries - 1:
+                            wait_time = (retry + 1) * 5  # 5s, 10s, 15s
+                            progress((idx / len(files)), desc=f"Rate limit - doi {wait_time}s...")
+                            time.sleep(wait_time)
+                        else:
+                            raise api_error
+                
+                doc = Document(page_content=text, metadata={"filename": file_name, "type": "image"})
+                splits_small = rag_system.splitter_small.split_documents([doc])
+                splits_large = rag_system.splitter_large.split_documents([doc])
+                
+                if not rag_system.vectorstore:
+                    rag_system.vectorstore = Chroma.from_documents(splits_small, rag_system.embeddings,
+                        persist_directory=rag_system.persist_directory, collection_name="small_chunks")
+                else:
+                    rag_system.vectorstore.add_documents(splits_small)
+                
+                large_dir = rag_system.persist_directory + "_large"
+                if not rag_system.vectorstore_large:
+                    rag_system.vectorstore_large = Chroma.from_documents(splits_large, rag_system.embeddings,
+                        persist_directory=large_dir, collection_name="large_chunks")
+                else:
+                    rag_system.vectorstore_large.add_documents(splits_large)
+                
+                rag_system._update_bm25(splits_small)
+                elapsed = time.time() - start_time
+                
+                uploaded_files.append({
+                    "name": file_name, "type": "Image", "chunks": len(splits_small),
+                    "ocr_used": True, "time": datetime.now().strftime("%H:%M:%S")
+                })
+                results.append(f"[OK] **{file_name}** - {len(splits_small)} chunks (OCR) [{elapsed:.1f}s]")
+                total_processed += 1
+                
+        except Exception as e:
+            logger.error(f"Error processing {file_name}: {e}")
+            results.append(f"[ERROR] **{file_name}** - Error: {str(e)[:40]}")
+    
+    progress(1.0, desc="Hoàn thành!")
+    
+    # Build summary - combine all warnings
+    summary_parts = []
+    
+    if files_needing_ocr:
+        ocr_warning = f"**[CẦN OCR]** Các file sau cần OCR:\n"
+        for fname in files_needing_ocr:
+            ocr_warning += f"- {fname}\n"
+        summary_parts.append(ocr_warning)
+    
+    if skipped_duplicates:
+        dup_warning = f"**[ĐÃ TỒN TẠI]** Bỏ qua: {', '.join(skipped_duplicates)}"
+        summary_parts.append(dup_warning)
+    
+    if results:
+        result_text = f"### Kết quả ({total_processed} file xử lý):\n\n"
+        for r in results:
+            result_text += f"{r}\n\n"
+        summary_parts.append(result_text)
+    
+    if summary_parts:
+        summary = "\n\n".join(summary_parts)
+    else:
+        summary = "Không có file được xử lý."
+    
+    # Build file list
+    all_db_files = rag_system.get_all_files()
+    session_names = [f['name'] for f in uploaded_files]
+    existing_display = [f for f in all_db_files if f not in session_names]
+    
+    file_list = ""
+    if uploaded_files:
+        file_list += "### File vừa upload:\n\n"
+        for i, f in enumerate(uploaded_files, 1):
+            file_list += f"**{i}. {f['name']}** ({f['type']})\n"
+            file_list += f"   - {f['chunks']} chunks | {f['time']}\n"
+            if f.get("ocr_used"):
+                file_list += f"   - OCR: Có\n"
+            file_list += "\n"
+    
+    if existing_display:
+        file_list += "### File đã có sẵn:\n\n"
+        for i, fname in enumerate(existing_display, 1):
+            file_list += f"{i}. {fname}\n\n"
+    
+    return summary, gr.update(value=file_list), rag_system, uploaded_files, gr.update(choices=all_db_files, value=[])
 
 
 def chat_response(message, history, rag_system, selected_files):
@@ -276,8 +282,12 @@ initial_rag = create_rag_system()
 
 with gr.Blocks(theme=gr.themes.Soft(), title="PDF RAG DeepSeekOCR Chatbot", css="""
     .status-box {padding: 15px; border-radius: 8px; background: #1e293b; color: #f1f5f9;}
-    .file-list-box {padding: 10px; border-radius: 8px; background: #334155; color: #f1f5f9; min-height: 150px;}
+    .file-list-box {padding: 10px; border-radius: 8px; background: #334155; color: #f1f5f9; min-height: 150px; max-height: 350px; overflow-y: auto !important;}
+    .file-list-box * {overflow: visible !important;}
+    .file-list-box div, .file-list-box span {max-height: none !important;}
     .info-box {padding: 12px; border-radius: 8px; background: #0f172a; color: #cbd5e1; border: 2px solid #3b82f6; margin: 10px 0;}
+    #file-filter-dropdown ul {max-height: 250px !important; overflow-y: auto !important;}
+    #file-filter-dropdown .options {max-height: 250px !important; overflow-y: auto !important;}
 """) as demo:
     # Session state - không dùng global variables
     rag_state = gr.State(lambda: initial_rag)
@@ -294,7 +304,7 @@ with gr.Blocks(theme=gr.themes.Soft(), title="PDF RAG DeepSeekOCR Chatbot", css=
             file_input = gr.File(
                 label=f"Kéo thả file vào đây (tối đa {MAX_FILE_SIZE_MB}MB)",
                 file_types=[".pdf", ".png", ".jpg", ".jpeg"],
-                file_count="single"
+                file_count="multiple"
             )
 
             ocr_toggle = gr.Checkbox(
@@ -316,13 +326,15 @@ with gr.Blocks(theme=gr.themes.Soft(), title="PDF RAG DeepSeekOCR Chatbot", css=
         with gr.Column(scale=2):
             gr.Markdown("###  Chat với Tài Liệu")
             
-            # File filter dropdown - supports multiple selection
+            # File filter dropdown - supports multiple selection with scroll
             file_filter = gr.Dropdown(
                 choices=[],
                 value=[],
                 multiselect=True,
                 label="Chọn file để hỏi",
-                info="Chọn 1 hoặc nhiều file. Để trống = tìm tất cả file"
+                info="Chọn 1 hoặc nhiều file. Để trống = tìm tất cả file",
+                max_choices=None,
+                elem_id="file-filter-dropdown"
             )
 
             chatbot = gr.Chatbot(
@@ -345,7 +357,7 @@ with gr.Blocks(theme=gr.themes.Soft(), title="PDF RAG DeepSeekOCR Chatbot", css=
 
     # Event handlers với state
     process_btn.click(
-        fn=process_file,
+        fn=process_files,
         inputs=[file_input, ocr_toggle, rag_state, files_state],
         outputs=[status_output, file_list, rag_state, files_state, file_filter]
     )
