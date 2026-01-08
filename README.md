@@ -4,9 +4,12 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Gradio](https://img.shields.io/badge/Gradio-UI-FF6F00?style=for-the-badge&logo=gradio&logoColor=white)](https://gradio.app)
+[![Hugging Face](https://img.shields.io/badge/🤗%20Hugging%20Face-Spaces-yellow?style=for-the-badge)](https://huggingface.co/spaces/toanthangle/pdf-rag-deepseek-ocr-chatbot)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
 **An intelligent chatbot that enables conversations with PDF documents and images using RAG (Retrieval-Augmented Generation) and DeepSeek OCR.**
+
+### 🚀 [Try the Live Demo](https://huggingface.co/spaces/toanthangle/pdf-rag-deepseek-ocr-chatbot)
 
 [Features](#-features) • [Installation](#-installation) • [Usage](#-usage) • [Project Structure](#-project-structure) • [Pricing](#-pricing)
 
