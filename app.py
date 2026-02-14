@@ -373,7 +373,7 @@ with gr.Blocks(title="PDF RAG DeepSeekOCR Chatbot", theme=gr.themes.Soft(), css=
                             scale=1
                         )
                     
-                    chatbot = gr.Chatbot(height=450)
+                    chatbot = gr.Chatbot(height=450, type="messages")
                     
                     with gr.Row():
                         msg_input = gr.Textbox(
