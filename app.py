@@ -53,10 +53,11 @@ def validate_file(file) -> tuple[bool, str]:
     return True, ""
 
 
-def process_files(files, enable_ocr, rag_system, uploaded_files, progress=gr.Progress()):
+def process_files(files, enable_ocr, uploaded_files, progress=gr.Progress()):
     """Process multiple uploaded files with OCR detection"""
+    global rag_system
     if not files or len(files) == 0:
-        return "Vui lòng chọn ít nhất 1 file!", gr.update(), rag_system, uploaded_files, gr.update()
+        return "Vui lòng chọn ít nhất 1 file!", gr.update(), uploaded_files, gr.update()
     
     if not isinstance(files, list):
         files = [files]
@@ -201,13 +202,13 @@ def process_files(files, enable_ocr, rag_system, uploaded_files, progress=gr.Pro
         for i, fname in enumerate(existing_display, 1):
             file_list += f"{i}. {fname}\n\n"
     
-    return summary, gr.update(value=file_list), rag_system, uploaded_files, gr.update(choices=all_db_files, value=[])
+    return summary, gr.update(value=file_list), uploaded_files, gr.update(choices=all_db_files, value=[])
 
 
-def chat_response(message, history, rag_system, selected_files, use_agentic):
+def chat_response(message, history, selected_files, use_agentic):
     """Handle chat messages with optional file filter and RAG mode selection"""
     if not message.strip():
-        return history, rag_system, ""
+        return history, ""
 
     history.append({"role": "user", "content": message})
     
@@ -220,7 +221,7 @@ def chat_response(message, history, rag_system, selected_files, use_agentic):
             history.append({"role": "assistant", "content": f"[{mode_label}] Đang tìm kiếm trong **{len(selected_files)}** file..."})
     else:
         history.append({"role": "assistant", "content": f"[{mode_label}] Đang phân tích câu hỏi (tất cả file)..."})
-    yield history, rag_system, ""
+    yield history, ""
 
     start_time = time.time()
     
@@ -273,7 +274,7 @@ def chat_response(message, history, rag_system, selected_files, use_agentic):
     response += f"\n*Thời gian xử lý: {elapsed:.2f}s | Mode: {mode_label}*"
 
     history[-1]["content"] = response
-    yield history, rag_system, reasoning_text
+    yield history, reasoning_text
 
 
 def clear_chat():
@@ -281,8 +282,8 @@ def clear_chat():
     return []
 
 
-# Create RAG system instance
-initial_rag = create_rag_system()
+# Create RAG system instance (global variable to avoid gr.State schema issues)
+rag_system = create_rag_system()
 
 CSS = """
     .status-box {padding: 15px; border-radius: 8px; background: #1e293b; color: #f1f5f9;}
@@ -301,7 +302,6 @@ CSS = """
 """
 
 with gr.Blocks(title="PDF RAG DeepSeekOCR Chatbot", theme=gr.themes.Soft(), css=CSS) as demo:
-    rag_state = gr.State(lambda: initial_rag)
     files_state = gr.State([])
     
     gr.Markdown("""
@@ -414,14 +414,14 @@ with gr.Blocks(title="PDF RAG DeepSeekOCR Chatbot", theme=gr.themes.Soft(), css=
 
     process_btn.click(
         fn=process_files,
-        inputs=[file_input, ocr_toggle, rag_state, files_state],
-        outputs=[status_output, file_list, rag_state, files_state, file_filter]
+        inputs=[file_input, ocr_toggle, files_state],
+        outputs=[status_output, file_list, files_state, file_filter]
     )
 
     msg_input.submit(
         fn=chat_response,
-        inputs=[msg_input, chatbot, rag_state, file_filter, agentic_toggle],
-        outputs=[chatbot, rag_state, reasoning_display]
+        inputs=[msg_input, chatbot, file_filter, agentic_toggle],
+        outputs=[chatbot, reasoning_display]
     ).then(
         fn=lambda: "",
         outputs=[msg_input]
@@ -429,8 +429,8 @@ with gr.Blocks(title="PDF RAG DeepSeekOCR Chatbot", theme=gr.themes.Soft(), css=
 
     submit_btn.click(
         fn=chat_response,
-        inputs=[msg_input, chatbot, rag_state, file_filter, agentic_toggle],
-        outputs=[chatbot, rag_state, reasoning_display]
+        inputs=[msg_input, chatbot, file_filter, agentic_toggle],
+        outputs=[chatbot, reasoning_display]
     ).then(
         fn=lambda: "",
         outputs=[msg_input]
@@ -443,7 +443,7 @@ with gr.Blocks(title="PDF RAG DeepSeekOCR Chatbot", theme=gr.themes.Soft(), css=
 
     def load_initial_state():
         """Load initial state including file list from vectorstore"""
-        existing_files = initial_rag.get_all_files()
+        existing_files = rag_system.get_all_files()
         
         if existing_files:
             file_list_text = "### File đã upload:\n\n"
