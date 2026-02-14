@@ -7,6 +7,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Monkey-patch gradio_client bug: get_type crashes when schema is a bool
+# See: gradio_client/utils.py line 887 - "if 'const' in schema" fails when schema=True
+import gradio_client.utils as _gc_utils
+_original_get_type = _gc_utils.get_type
+def _patched_get_type(schema):
+    if isinstance(schema, bool):
+        return "any"
+    return _original_get_type(schema)
+_gc_utils.get_type = _patched_get_type
+
 import gradio as gr
 import replicate
 
