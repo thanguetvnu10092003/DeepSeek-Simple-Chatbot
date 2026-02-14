@@ -4,14 +4,15 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Gradio](https://img.shields.io/badge/Gradio-UI-FF6F00?style=for-the-badge&logo=gradio&logoColor=white)](https://gradio.app)
+[![LangGraph](https://img.shields.io/badge/LangGraph-Agentic_RAG-8B5CF6?style=for-the-badge)](https://langchain-ai.github.io/langgraph/)
 [![Hugging Face](https://img.shields.io/badge/🤗%20Hugging%20Face-Spaces-yellow?style=for-the-badge)](https://huggingface.co/spaces/toanthangle/pdf-rag-deepseek-ocr-chatbot)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
-**An intelligent chatbot that enables conversations with PDF documents and images using RAG (Retrieval-Augmented Generation) and DeepSeek OCR.**
+**An intelligent chatbot that enables conversations with PDF documents and images using Agentic RAG (LangGraph) and DeepSeek OCR.**
 
 ### 🚀 [Try the Live Demo](https://huggingface.co/spaces/toanthangle/pdf-rag-deepseek-ocr-chatbot)
 
-[Features](#-features) • [Installation](#-installation) • [Usage](#-usage) • [Project Structure](#-project-structure) • [Pricing](#-pricing)
+[Features](#-features) • [Architecture](#-agentic-rag-architecture) • [Installation](#-installation) • [Usage](#-usage) • [Project Structure](#-project-structure) • [Pricing](#-pricing)
 
 </div>
 
@@ -21,14 +22,71 @@
 
 | Feature | Description |
 |---------|-------------|
+| 🤖 **Agentic RAG** | LangGraph-powered agent with multi-step reasoning, self-correction, and hallucination check |
 | 📁 **Multi-file Upload** | Drag and drop multiple PDF/image files at once |
-| 🧠 **Smart Query Classification** | Automatically optimizes retrieval based on query type |
+| 🧠 **Smart Query Routing** | Automatically classifies and decomposes complex queries |
 | 🔄 **Dual Vectorstore** | Uses 2 chunk sizes (500 & 1500) for different query types |
 | 🔍 **Hybrid Search** | Combines semantic search + BM25 for better results |
 | 👁️ **OCR Support** | Process scanned PDFs and images with DeepSeek OCR (via Replicate) |
 | 📂 **Multi-file Query** | Select one or multiple specific files to query |
-| ⏱️ **Rate Limit Handling** | Automatic retry when hitting Replicate API rate limits |
-| 🔒 **Duplicate Detection** | Automatically detects and skips duplicate files |
+| 🔁 **Self-Correction** | Agent rewrites queries and retries when retrieval is poor (max 2 retries) |
+| 📊 **Reasoning Steps** | View agent's thinking process in the UI |
+| ⚡ **Dual Mode** | Switch between Agentic RAG (smart) and Traditional RAG (fast) |
+
+---
+
+## 🏗️ Agentic RAG Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                   User Query                        │
+└──────────────────────┬──────────────────────────────┘
+                       ▼
+              ┌────────────────┐
+              │  Router Node   │ ← Classify: simple / complex
+              └───────┬────────┘
+                      │
+          ┌───────────┴───────────┐
+          ▼                       ▼
+    ┌───────────┐         ┌──────────────┐
+    │  Simple   │         │  Decompose   │ ← Split into sub-questions
+    └─────┬─────┘         └──────┬───────┘
+          │                      │
+          └──────────┬───────────┘
+                     ▼
+            ┌────────────────┐
+            │ Retrieve Node  │ ← Hybrid Search (Semantic + BM25)
+            └───────┬────────┘
+                    ▼
+            ┌────────────────┐
+            │  Grader Node   │ ← Filter irrelevant documents
+            └───────┬────────┘
+                    │
+         ┌──────────┴──────────┐
+         ▼                     ▼
+   ┌───────────┐        ┌───────────────┐
+   │  ≥30%     │        │  <30% relevant│
+   │ relevant  │        │  retry < 2    │
+   └─────┬─────┘        └──────┬────────┘
+         │                     ▼
+         │              ┌──────────────┐
+         │              │ Rewrite Node │ ← Reformulate query
+         │              └──────┬───────┘
+         │                     │
+         │                     └──► (back to Retrieve)
+         ▼
+   ┌────────────────┐
+   │ Generator Node │ ← Generate answer with context
+   └───────┬────────┘
+           ▼
+   ┌─────────────────────┐
+   │ Hallucination Check │ ← Verify grounding
+   └───────┬─────────────┘
+           ▼
+     ┌───────────┐
+     │  Answer   │
+     └───────────┘
+```
 
 ---
 
@@ -81,7 +139,7 @@ REPLICATE_API_TOKEN=your_replicate_token
 ### Start the Application
 
 ```bash
-python main.py
+python app.py
 ```
 
 ### Access the Interface
@@ -94,9 +152,14 @@ Open your browser and navigate to: **http://127.0.0.1:7860**
    - Drag and drop one or multiple PDF/PNG/JPG files
    - Enable OCR for scanned PDFs and images (~$0.001/page)
 
-2. **Chat with Your Documents**
+2. **Choose RAG Mode**
+   - **Agentic RAG** (default): Smart multi-step agent with self-correction
+   - **Traditional RAG**: Fast single-pass hybrid search
+
+3. **Chat with Your Documents**
    - Select specific files or leave empty to search all
    - Ask any question about your documents
+   - View agent reasoning steps in the accordion panel
 
 ---
 
@@ -104,9 +167,10 @@ Open your browser and navigate to: **http://127.0.0.1:7860**
 
 ```
 📦 DeepSeek-Simple-Chatbot
-├── 📄 main.py              # Gradio UI and file upload handling
-├── 📄 rag.py               # RAG system with hybrid search
-├── 📄 llm.py               # Groq LLM wrapper
+├── 📄 app.py               # Gradio UI with mode toggle & reasoning display
+├── 📄 agentic_rag.py        # LangGraph Agentic RAG workflow (6 nodes)
+├── 📄 rag.py               # RAG system with hybrid search + agentic integration
+├── 📄 llm.py               # Groq LLM wrapper + agentic methods
 ├── 📄 pdf_ocr_loader.py    # PDF loader with OCR support
 ├── 📄 requirements.txt     # Python dependencies
 ├── 📄 environment.yaml     # Conda environment config
@@ -123,6 +187,8 @@ Open your browser and navigate to: **http://127.0.0.1:7860**
 | OCR per Page | ~$0.001 |
 | Image OCR | ~$0.001 |
 | LLM (Groq) | **Free** |
+
+> **Note:** Agentic RAG uses ~2-4x more API calls than Traditional RAG due to query routing, document grading, and hallucination checking. Groq API is free so this has no cost impact.
 
 ---
 
