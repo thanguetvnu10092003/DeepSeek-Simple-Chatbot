@@ -462,4 +462,4 @@ with gr.Blocks(title="PDF RAG DeepSeekOCR Chatbot", theme=gr.themes.Soft(), css=
     )
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(ssr_mode=False)
