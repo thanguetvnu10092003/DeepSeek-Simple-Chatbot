@@ -14,6 +14,7 @@ from langchain_chroma import Chroma
 from langchain_community.retrievers import BM25Retriever
 from llm import GroqLLM
 from pdf_ocr_loader import OCRPDFLoader
+from agentic_rag import run_agentic_query
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -659,3 +660,19 @@ class LangChainPDFRAG:
 
         logger.info(f"Query completed: strategy={query_type}, chunks={len(balanced_docs)}")
         return answer + strategy_info, final_sources
+
+    def query_agentic(self, question: str, target_files: list = None):
+        """
+        Query using Agentic RAG with LangGraph.
+        Returns (answer, sources, reasoning_steps)
+        """
+        if not self.vectorstore:
+            return "Chưa có tài liệu nào được thêm vào!", [], []
+
+        logger.info(f"[Agentic] Processing query: {question[:100]}...")
+        return run_agentic_query(
+            llm=self.llm,
+            rag_system=self,
+            question=question,
+            target_files=target_files,
+        )

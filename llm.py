@@ -166,3 +166,204 @@ Giải thích:
             "complexity": "medium",
             "needs_detail": True
         }
+
+    # ===========================
+    # Agentic RAG Methods
+    # ===========================
+
+    def route_query(self, question: str) -> dict:
+        """
+        Route query to determine if it's simple or complex.
+        Complex queries need decomposition into sub-questions.
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[{
+                    "role": "user",
+                    "content": f"""Analyze this question and determine if it's SIMPLE or COMPLEX.
+
+Question: "{question}"
+
+A question is COMPLEX if it:
+- Requires comparing information from multiple sources
+- Has multiple sub-questions or parts
+- Needs multi-step reasoning
+- Asks for analysis/synthesis across topics
+
+Return JSON:
+{{
+    "type": "simple" or "complex",
+    "reasoning": "brief explanation"
+}}"""
+                }],
+                temperature=0.1,
+                max_tokens=100,
+            )
+            result = response.choices[0].message.content.strip()
+            return self._parse_json_response(result)
+        except Exception as e:
+            logger.warning(f"Route query error: {e}")
+            return {"type": "simple", "reasoning": "fallback"}
+
+    def decompose_query(self, question: str) -> list:
+        """
+        Decompose a complex question into simpler sub-questions.
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[{
+                    "role": "user",
+                    "content": f"""Break down this complex question into 2-4 simpler sub-questions.
+Each sub-question should be answerable independently.
+
+Original question: "{question}"
+
+Return JSON:
+{{
+    "sub_questions": ["question1", "question2", ...]
+}}"""
+                }],
+                temperature=0.2,
+                max_tokens=300,
+            )
+            result = response.choices[0].message.content.strip()
+            parsed = self._parse_json_response(result)
+            sub_qs = parsed.get("sub_questions", [question])
+            # Ensure we always have at least the original question
+            return sub_qs if sub_qs else [question]
+        except Exception as e:
+            logger.warning(f"Decompose query error: {e}")
+            return [question]
+
+    def grade_documents(self, question: str, documents: list) -> list:
+        """
+        Grade documents for relevance to the question.
+        Returns a list of booleans (True = relevant).
+        Grades in batches to save API calls.
+        """
+        if not documents:
+            return []
+
+        # Batch grading: grade up to 10 docs at a time
+        batch_size = 10
+        all_grades = []
+
+        for i in range(0, len(documents), batch_size):
+            batch = documents[i:i + batch_size]
+            doc_summaries = []
+            for j, doc in enumerate(batch):
+                content_preview = doc.page_content[:300]
+                doc_summaries.append(f"Doc {j+1}: {content_preview}")
+
+            docs_text = "\n---\n".join(doc_summaries)
+
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[{
+                        "role": "user",
+                        "content": f"""Grade each document's relevance to the question.
+
+Question: "{question}"
+
+Documents:
+{docs_text}
+
+For each document, determine if it contains information relevant to answering the question.
+Return JSON:
+{{
+    "grades": [true, false, true, ...] // one boolean per document
+}}"""
+                    }],
+                    temperature=0.1,
+                    max_tokens=200,
+                )
+                result = response.choices[0].message.content.strip()
+                parsed = self._parse_json_response(result)
+                grades = parsed.get("grades", [True] * len(batch))
+
+                # Ensure correct length
+                while len(grades) < len(batch):
+                    grades.append(True)
+                all_grades.extend(grades[:len(batch)])
+            except Exception as e:
+                logger.warning(f"Grade documents error: {e}")
+                all_grades.extend([True] * len(batch))
+
+        return all_grades
+
+    def rewrite_query(self, original_question: str, context: str = "") -> str:
+        """
+        Rewrite a query to improve retrieval results.
+        """
+        try:
+            context_hint = ""
+            if context:
+                context_hint = f"\n\nPartial context found (may not be fully relevant):\n{context[:500]}"
+
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[{
+                    "role": "user",
+                    "content": f"""The following question did not retrieve good results from a document search.
+Rewrite it to improve search results. Use different keywords, be more specific, or try alternative phrasing.
+
+Original question: "{original_question}"{context_hint}
+
+Return ONLY the rewritten question, nothing else."""
+                }],
+                temperature=0.3,
+                max_tokens=200,
+            )
+            rewritten = response.choices[0].message.content.strip()
+            # Clean up - remove quotes if present
+            rewritten = rewritten.strip('"').strip("'")
+            return rewritten if rewritten else original_question
+        except Exception as e:
+            logger.warning(f"Rewrite query error: {e}")
+            return original_question
+
+    def check_hallucination(self, answer: str, documents: list) -> bool:
+        """
+        Check if the answer is grounded in the provided documents.
+        Returns True if grounded (no hallucination), False otherwise.
+        """
+        if not documents or not answer:
+            return True  # Can't check without docs
+
+        # Build context from top documents
+        doc_context = "\n---\n".join([
+            doc.page_content[:400] for doc in documents[:5]
+        ])
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[{
+                    "role": "user",
+                    "content": f"""Determine if the answer is grounded in (supported by) the source documents.
+The answer should not contain claims that are not supported by the documents.
+
+Source Documents:
+{doc_context}
+
+Answer to check:
+{answer[:1000]}
+
+Return JSON:
+{{
+    "is_grounded": true/false,
+    "reasoning": "brief explanation"
+}}"""
+                }],
+                temperature=0.1,
+                max_tokens=150,
+            )
+            result = response.choices[0].message.content.strip()
+            parsed = self._parse_json_response(result)
+            return parsed.get("is_grounded", True)
+        except Exception as e:
+            logger.warning(f"Hallucination check error: {e}")
+            return True  # Default to trusting the answer

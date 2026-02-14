@@ -3,6 +3,9 @@
 import time
 import os
 import logging
+from dotenv import load_dotenv
+
+load_dotenv()
 
 import gradio as gr
 import replicate
@@ -201,26 +204,41 @@ def process_files(files, enable_ocr, rag_system, uploaded_files, progress=gr.Pro
     return summary, gr.update(value=file_list), rag_system, uploaded_files, gr.update(choices=all_db_files, value=[])
 
 
-def chat_response(message, history, rag_system, selected_files):
-    """Handle chat messages with optional file filter"""
+def chat_response(message, history, rag_system, selected_files, use_agentic):
+    """Handle chat messages with optional file filter and RAG mode selection"""
     if not message.strip():
-        return history, rag_system
+        return history, rag_system, ""
 
     history.append({"role": "user", "content": message})
     
+    mode_label = "Agentic RAG" if use_agentic else "Traditional RAG"
+    
     if selected_files and len(selected_files) > 0:
         if len(selected_files) == 1:
-            history.append({"role": "assistant", "content": f"Đang tìm kiếm trong **{selected_files[0]}**..."})
+            history.append({"role": "assistant", "content": f"[{mode_label}] Đang tìm kiếm trong **{selected_files[0]}**..."})
         else:
-            history.append({"role": "assistant", "content": f"Đang tìm kiếm trong **{len(selected_files)}** file..."})
+            history.append({"role": "assistant", "content": f"[{mode_label}] Đang tìm kiếm trong **{len(selected_files)}** file..."})
     else:
-        history.append({"role": "assistant", "content": "Đang phân tích câu hỏi (tất cả file)..."})
-    yield history, rag_system
+        history.append({"role": "assistant", "content": f"[{mode_label}] Đang phân tích câu hỏi (tất cả file)..."})
+    yield history, rag_system, ""
 
     start_time = time.time()
     
     target_files = selected_files if selected_files and len(selected_files) > 0 else None
-    answer, sources = rag_system.query(message, target_files=target_files)
+    reasoning_text = ""
+    
+    if use_agentic:
+        answer, sources, reasoning_steps = rag_system.query_agentic(message, target_files=target_files)
+        # Format reasoning steps for display
+        if reasoning_steps:
+            reasoning_parts = ["### Agent Reasoning Steps\n"]
+            for i, step in enumerate(reasoning_steps, 1):
+                reasoning_parts.append(f"{i}. {step}")
+            reasoning_text = "\n".join(reasoning_parts)
+    else:
+        answer, sources = rag_system.query(message, target_files=target_files)
+        reasoning_text = "*Traditional RAG mode - no reasoning steps*"
+
     elapsed = time.time() - start_time
 
     response = f"{answer}\n\n"
@@ -252,10 +270,10 @@ def chat_response(message, history, rag_system, selected_files):
                 else:
                     response += f"• {filename}\n"
 
-    response += f"\n*Thời gian xử lý: {elapsed:.2f}s*"
+    response += f"\n*Thời gian xử lý: {elapsed:.2f}s | Mode: {mode_label}*"
 
     history[-1]["content"] = response
-    yield history, rag_system
+    yield history, rag_system, reasoning_text
 
 
 def clear_chat():
@@ -274,9 +292,15 @@ CSS = """
     .info-box {padding: 12px; border-radius: 8px; background: #0f172a; color: #cbd5e1; border: 2px solid #3b82f6; margin: 10px 0;}
     #file-filter-dropdown ul {max-height: 250px !important; overflow-y: auto !important;}
     #file-filter-dropdown .options {max-height: 250px !important; overflow-y: auto !important;}
+    .reasoning-box {padding: 12px; border-radius: 8px; background: #0c1222; color: #94a3b8; border: 1px solid #1e3a5f;
+        font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85em; max-height: 300px; overflow-y: auto !important;}
+    .reasoning-box .step {padding: 4px 0; border-bottom: 1px solid #1e293b;}
+    .mode-badge {display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.8em; font-weight: bold;}
+    .mode-agentic {background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white;}
+    .mode-traditional {background: linear-gradient(135deg, #059669, #10b981); color: white;}
 """
 
-with gr.Blocks(title="PDF RAG DeepSeekOCR Chatbot") as demo:
+with gr.Blocks(title="PDF RAG DeepSeekOCR Chatbot", theme=gr.themes.Soft(), css=CSS) as demo:
     rag_state = gr.State(lambda: initial_rag)
     files_state = gr.State([])
     
@@ -284,59 +308,109 @@ with gr.Blocks(title="PDF RAG DeepSeekOCR Chatbot") as demo:
     # PDF RAG DeepSeekOCR Chatbot
     Chat với tài liệu PDF và ảnh sử dụng AI
     """)
-
-    with gr.Row():
-        with gr.Column(scale=1):
-            gr.Markdown("### Upload Tài Liệu")
-
-            file_input = gr.File(
-                label=f"Kéo thả file vào đây (tối đa {MAX_FILE_SIZE_MB}MB)",
-                file_types=[".pdf", ".png", ".jpg", ".jpeg"],
-                file_count="multiple"
-            )
-
-            ocr_toggle = gr.Checkbox(
-                label="Sử dụng OCR trả phí",
-                value=False,
-                info="Chi phí: ~$0.001/trang"
-            )
-
+    
+    with gr.Tabs():
+        with gr.Tab("Chat"):
             with gr.Row():
-                process_btn = gr.Button("Xử lý File", variant="primary", size="lg")
+                with gr.Column(scale=1):
+                    gr.Markdown("### Upload Tài Liệu")
+                    
+                    file_input = gr.File(
+                        label=f"Kéo thả file vào đây (tối đa {MAX_FILE_SIZE_MB}MB)",
+                        file_types=[".pdf", ".png", ".jpg", ".jpeg"],
+                        file_count="multiple"
+                    )
+                    
+                    ocr_toggle = gr.Checkbox(
+                        label="Sử dụng OCR trả phí",
+                        value=False,
+                        info="Chi phí: ~$0.001/trang"
+                    )
+                    
+                    process_btn = gr.Button("Xử lý File", variant="primary", size="lg")
+                    
+                    status_output = gr.Markdown("", elem_classes="status-box")
+                    
+                    gr.Markdown("---")
+                    file_list = gr.Markdown("*Chưa có file nào*", elem_classes="file-list-box")
+                
+                with gr.Column(scale=2):
+                    gr.Markdown("### Chat với Tài Liệu")
+                    
+                    with gr.Row():
+                        file_filter = gr.Dropdown(
+                            choices=[],
+                            value=[],
+                            multiselect=True,
+                            label="Chọn file để hỏi",
+                            info="Chọn 1 hoặc nhiều file. Để trống = tìm tất cả file",
+                            max_choices=None,
+                            elem_id="file-filter-dropdown",
+                            scale=3
+                        )
+                        agentic_toggle = gr.Checkbox(
+                            label="Agentic RAG",
+                            value=True,
+                            info="Bật để sử dụng agent thông minh (chậm hơn, chính xác hơn)",
+                            scale=1
+                        )
+                    
+                    chatbot = gr.Chatbot(height=450, type="messages")
+                    
+                    with gr.Row():
+                        msg_input = gr.Textbox(
+                            placeholder="Nhập câu hỏi của bạn... (Enter để gửi)",
+                            show_label=False,
+                            scale=4,
+                            container=False
+                        )
+                        submit_btn = gr.Button("Gửi", scale=1, variant="primary")
+                    
+                    with gr.Row():
+                        clear_chat_btn = gr.Button("Xóa Chat", scale=1)
+                    
+                    with gr.Accordion("Agent Reasoning Steps", open=False):
+                        reasoning_display = gr.Markdown(
+                            "*Gửi câu hỏi với Agentic RAG để xem reasoning steps*",
+                            elem_classes="reasoning-box"
+                        )
+        
+        with gr.Tab("Hướng dẫn sử dụng"):
+            gr.Markdown("""
+## Hướng dẫn sử dụng PDF RAG Chatbot
 
-            status_output = gr.Markdown("", elem_classes="status-box")
+### 1. Upload tài liệu
+- **Kéo thả** hoặc click để chọn file PDF, PNG, JPG
+- Có thể upload **nhiều file** cùng lúc
+- Kích thước tối đa: **50MB/file**
 
-            gr.Markdown("---")
-            file_list = gr.Markdown("*Chưa có file nào*", elem_classes="file-list-box")
+### 2. Xử lý OCR (tùy chọn)
+- **PDF text thường**: Không cần bật OCR (miễn phí)
+- **PDF scan/ảnh chụp**: Bật "Sử dụng OCR trả phí"
+- Chi phí OCR: ~$0.001/trang
 
-        with gr.Column(scale=2):
-            gr.Markdown("### Chat với Tài Liệu")
-            
-            file_filter = gr.Dropdown(
-                choices=[],
-                value=[],
-                multiselect=True,
-                label="Chọn file để hỏi",
-                info="Chọn 1 hoặc nhiều file. Để trống = tìm tất cả file",
-                max_choices=None,
-                elem_id="file-filter-dropdown"
-            )
+### 3. Chế độ RAG
+- **Agentic RAG** (mặc định): Agent thông minh với khả năng:
+  - Phân tích và phân loại câu hỏi tự động
+  - Chia câu hỏi phức tạp thành nhiều bước
+  - Đánh giá chất lượng tài liệu tìm được
+  - Tự viết lại câu hỏi nếu kết quả không tốt (tối đa 2 lần)
+  - Kiểm tra hallucination trước khi trả lời
+  - Hiển thị reasoning steps bên dưới chat
+- **Traditional RAG**: Hybrid search truyền thống (nhanh hơn, ít API calls)
 
-            chatbot = gr.Chatbot(
-                height=500
-            )
+### 4. Chat với tài liệu
+- Nhập câu hỏi và nhấn Enter hoặc click "Gửi"
+- **Chọn file cụ thể**: Dùng dropdown "Chọn file để hỏi"
+- **Tìm tất cả file**: Để trống dropdown
+- **Xem reasoning**: Mở accordion "Agent Reasoning Steps"
 
-            with gr.Row():
-                msg_input = gr.Textbox(
-                    placeholder="Nhập câu hỏi của bạn... (Enter để gửi)",
-                    show_label=False,
-                    scale=4,
-                    container=False
-                )
-                submit_btn = gr.Button("Gửi", scale=1, variant="primary")
-
-            with gr.Row():
-                clear_chat_btn = gr.Button("Xóa Chat")
+### 5. Lưu ý
+- Agentic RAG chậm hơn (~2-4x) nhưng chính xác hơn cho câu hỏi phức tạp
+- File đã upload sẽ được lưu cho các session sau
+- Hệ thống tự động phát hiện file trùng lặp
+- Với ảnh, phải bật OCR thì mới xử lý được
+            """)
 
     process_btn.click(
         fn=process_files,
@@ -346,8 +420,8 @@ with gr.Blocks(title="PDF RAG DeepSeekOCR Chatbot") as demo:
 
     msg_input.submit(
         fn=chat_response,
-        inputs=[msg_input, chatbot, rag_state, file_filter],
-        outputs=[chatbot, rag_state]
+        inputs=[msg_input, chatbot, rag_state, file_filter, agentic_toggle],
+        outputs=[chatbot, rag_state, reasoning_display]
     ).then(
         fn=lambda: "",
         outputs=[msg_input]
@@ -355,8 +429,8 @@ with gr.Blocks(title="PDF RAG DeepSeekOCR Chatbot") as demo:
 
     submit_btn.click(
         fn=chat_response,
-        inputs=[msg_input, chatbot, rag_state, file_filter],
-        outputs=[chatbot, rag_state]
+        inputs=[msg_input, chatbot, rag_state, file_filter, agentic_toggle],
+        outputs=[chatbot, rag_state, reasoning_display]
     ).then(
         fn=lambda: "",
         outputs=[msg_input]
@@ -388,4 +462,4 @@ with gr.Blocks(title="PDF RAG DeepSeekOCR Chatbot") as demo:
     )
 
 if __name__ == "__main__":
-    demo.launch(theme=gr.themes.Soft(), css=CSS)
+    demo.launch()
