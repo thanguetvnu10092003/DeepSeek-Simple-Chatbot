@@ -15,204 +15,276 @@ license: mit
 
 # 📚 PDF RAG Chatbot with DeepSeek OCR
 
-[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![Gradio](https://img.shields.io/badge/Gradio-UI-FF6F00?style=for-the-badge&logo=gradio&logoColor=white)](https://gradio.app)
-[![LangGraph](https://img.shields.io/badge/LangGraph-Agentic_RAG-8B5CF6?style=for-the-badge)](https://langchain-ai.github.io/langgraph/)
-[![Hugging Face](https://img.shields.io/badge/🤗%20Hugging%20Face-Spaces-yellow?style=for-the-badge)](https://huggingface.co/spaces/toanthangle/pdf-rag-deepseek-ocr-chatbot)
-[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+<p align="center">
+  <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python"></a>
+  <a href="https://gradio.app"><img src="https://img.shields.io/badge/Gradio-5.x-FF6F00?style=for-the-badge&logo=gradio&logoColor=white" alt="Gradio"></a>
+  <a href="https://langchain-ai.github.io/langgraph/"><img src="https://img.shields.io/badge/LangGraph-Agentic_RAG-8B5CF6?style=for-the-badge&logo=chainlink&logoColor=white" alt="LangGraph"></a>
+</p>
 
-**An intelligent chatbot that enables conversations with PDF documents and images using Agentic RAG (LangGraph) and DeepSeek OCR.**
+<p align="center">
+  <a href="https://huggingface.co/spaces/toanthangle/pdf-rag-deepseek-ocr-chatbot"><img src="https://img.shields.io/badge/🤗%20Live%20Demo-Hugging%20Face-FFD21E?style=for-the-badge" alt="Hugging Face"></a>
+  <a href="https://console.groq.com/"><img src="https://img.shields.io/badge/Groq-LLM_API-F55036?style=for-the-badge&logo=groq&logoColor=white" alt="Groq"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-22C55E?style=for-the-badge" alt="License"></a>
+</p>
 
-### 🚀 [Try the Live Demo](https://huggingface.co/spaces/toanthangle/pdf-rag-deepseek-ocr-chatbot)
+<br>
 
-[Features](#-features) • [Architecture](#-agentic-rag-architecture) • [Installation](#-installation) • [Usage](#-usage) • [Project Structure](#-project-structure) • [Pricing](#-pricing)
+> 🤖 **An intelligent AI chatbot** that lets you **chat with your PDF documents & images**  
+> powered by **Agentic RAG** (LangGraph) — with multi-step reasoning, self-correction & hallucination checking.
+
+<br>
+
+### 🚀 [Try the Live Demo →](https://huggingface.co/spaces/toanthangle/pdf-rag-deepseek-ocr-chatbot)
+
+<br>
+
+[Features](#-key-features) · [Architecture](#-agentic-rag-architecture) · [Quick Start](#-quick-start) · [Usage](#-usage) · [Pricing](#-pricing)
 
 </div>
 
----
-
-## ✨ Features
-
-| Feature | Description |
-|---------|-------------|
-| 🤖 **Agentic RAG** | LangGraph-powered agent with multi-step reasoning, self-correction, and hallucination check |
-| 📁 **Multi-file Upload** | Drag and drop multiple PDF/image files at once |
-| 🧠 **Smart Query Routing** | Automatically classifies and decomposes complex queries |
-| 🔄 **Dual Vectorstore** | Uses 2 chunk sizes (500 & 1500) for different query types |
-| 🔍 **Hybrid Search** | Combines semantic search + BM25 for better results |
-| 👁️ **OCR Support** | Process scanned PDFs and images with DeepSeek OCR (via Replicate) |
-| 📂 **Multi-file Query** | Select one or multiple specific files to query |
-| 🔁 **Self-Correction** | Agent rewrites queries and retries when retrieval is poor (max 2 retries) |
-| 📊 **Reasoning Steps** | View agent's thinking process in the UI |
-| ⚡ **Dual Mode** | Switch between Agentic RAG (smart) and Traditional RAG (fast) |
+<br>
 
 ---
+
+<br>
+
+## ⚡ Key Features
+
+<table>
+<tr>
+<td width="50%">
+
+### 🤖 Agentic RAG Mode
+- **Smart query routing** — auto-classifies simple vs complex
+- **Query decomposition** — breaks down multi-part questions
+- **Document grading** — filters irrelevant retrieval results
+- **Self-correction** — rewrites queries & retries (max 2x)
+- **Hallucination check** — verifies answers are grounded
+- **Reasoning steps** — view agent's thinking in UI
+
+</td>
+<td width="50%">
+
+### 🔍 Hybrid RAG Engine
+- **Dual vectorstore** — small (500) & large (1500) chunks
+- **Semantic search** — sentence-transformers embeddings
+- **BM25 keyword search** — combined for hybrid retrieval
+- **Multi-file query** — search across selected files
+- **OCR support** — DeepSeek OCR for scanned PDFs & images
+- **Dual mode toggle** — switch Agentic ↔ Traditional RAG
+
+</td>
+</tr>
+</table>
+
+<br>
+
+---
+
+<br>
 
 ## 🏗️ Agentic RAG Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                   User Query                        │
-└──────────────────────┬──────────────────────────────┘
-                       ▼
-              ┌────────────────┐
-              │  Router Node   │ ← Classify: simple / complex
-              └───────┬────────┘
-                      │
-          ┌───────────┴───────────┐
-          ▼                       ▼
-    ┌───────────┐         ┌──────────────┐
-    │  Simple   │         │  Decompose   │ ← Split into sub-questions
-    └─────┬─────┘         └──────┬───────┘
-          │                      │
-          └──────────┬───────────┘
-                     ▼
-            ┌────────────────┐
-            │ Retrieve Node  │ ← Hybrid Search (Semantic + BM25)
-            └───────┬────────┘
-                    ▼
-            ┌────────────────┐
-            │  Grader Node   │ ← Filter irrelevant documents
-            └───────┬────────┘
-                    │
-         ┌──────────┴──────────┐
-         ▼                     ▼
-   ┌───────────┐        ┌───────────────┐
-   │  ≥30%     │        │  <30% relevant│
-   │ relevant  │        │  retry < 2    │
-   └─────┬─────┘        └──────┬────────┘
-         │                     ▼
-         │              ┌──────────────┐
-         │              │ Rewrite Node │ ← Reformulate query
-         │              └──────┬───────┘
-         │                     │
-         │                     └──► (back to Retrieve)
-         ▼
-   ┌────────────────┐
-   │ Generator Node │ ← Generate answer with context
-   └───────┬────────┘
-           ▼
-   ┌─────────────────────┐
-   │ Hallucination Check │ ← Verify grounding
-   └───────┬─────────────┘
-           ▼
-     ┌───────────┐
-     │  Answer   │
-     └───────────┘
+                          ┌──────────────┐
+                          │  User Query  │
+                          └──────┬───────┘
+                                 ▼
+                        ┌────────────────┐
+                        │  🧭 Router    │  Classify: simple / complex
+                        └───────┬────────┘
+                                │
+                ┌───────────────┴───────────────┐
+                ▼                               ▼
+         ┌─────────────┐              ┌─────────────────┐
+         │   Simple    │              │  🔀 Decompose   │  Split into sub-questions
+         └──────┬──────┘              └────────┬────────┘
+                │                              │
+                └──────────────┬───────────────┘
+                               ▼
+                      ┌────────────────┐
+                      │  🔍 Retrieve  │  Hybrid Search (Semantic + BM25)
+                      └───────┬────────┘
+                              ▼
+                      ┌────────────────┐
+                      │  📊 Grade     │  Filter irrelevant documents
+                      └───────┬────────┘
+                              │
+                   ┌──────────┴──────────┐
+                   ▼                     ▼
+            ┌────────────┐       ┌──────────────┐
+            │  ✅ ≥30%   │       │  ❌ <30%     │
+            │  relevant  │       │  retry < 2   │
+            └─────┬──────┘       └──────┬───────┘
+                  │                     ▼
+                  │              ┌──────────────┐
+                  │              │  ✏️ Rewrite  │  Reformulate query
+                  │              └──────┬───────┘
+                  │                     │
+                  │                     └──► (back to 🔍 Retrieve)
+                  ▼
+           ┌────────────────┐
+           │  💬 Generate  │  Answer with context
+           └───────┬────────┘
+                   ▼
+          ┌─────────────────┐
+          │  🛡️ Hallucinate │  Verify grounding
+          │     Check       │
+          └───────┬─────────┘
+                  ▼
+            ┌───────────┐
+            │  ✨ Answer │
+            └───────────┘
 ```
+
+<br>
 
 ---
 
-## 🚀 Installation
+<br>
 
-### Prerequisites
+## 🚀 Quick Start
 
-- Python 3.10+
-- Conda or pip
-
-### Quick Setup
-
-**1. Clone the repository**
+### 1️⃣ Clone & Install
 
 ```bash
 git clone https://github.com/thanguetvnu10092003/DeepSeek-Simple-Chatbot.git
 cd DeepSeek-Simple-Chatbot
 ```
 
-**2. Create environment**
+<details>
+<summary><b>Option A: Conda (recommended)</b></summary>
 
-Using Conda (recommended):
 ```bash
 conda env create -f environment.yaml
 conda activate chatbot
 ```
+</details>
 
-Or using pip:
+<details>
+<summary><b>Option B: pip</b></summary>
+
 ```bash
 pip install -r requirements.txt
 ```
+</details>
 
-**3. Configure API keys**
+### 2️⃣ Configure API Keys
 
-Create a `.env` file in the project root:
+Create a `.env` file:
 
 ```env
 GROQ_API_KEY=your_groq_api_key
 REPLICATE_API_TOKEN=your_replicate_token
 ```
 
-> **📌 Get your API keys:**
-> - Groq API: https://console.groq.com/
-> - Replicate: https://replicate.com/account/api-tokens
+| Provider | Purpose | Get Key |
+|----------|---------|---------|
+| **Groq** | LLM (free) | [console.groq.com](https://console.groq.com/) |
+| **Replicate** | OCR (paid) | [replicate.com/account](https://replicate.com/account/api-tokens) |
 
----
-
-## 📖 Usage
-
-### Start the Application
+### 3️⃣ Launch
 
 ```bash
 python app.py
 ```
 
-### Access the Interface
+Open **http://127.0.0.1:7860** in your browser 🎉
 
-Open your browser and navigate to: **http://127.0.0.1:7860**
-
-### Workflow
-
-1. **Upload Documents**
-   - Drag and drop one or multiple PDF/PNG/JPG files
-   - Enable OCR for scanned PDFs and images (~$0.001/page)
-
-2. **Choose RAG Mode**
-   - **Agentic RAG** (default): Smart multi-step agent with self-correction
-   - **Traditional RAG**: Fast single-pass hybrid search
-
-3. **Chat with Your Documents**
-   - Select specific files or leave empty to search all
-   - Ask any question about your documents
-   - View agent reasoning steps in the accordion panel
+<br>
 
 ---
+
+<br>
+
+## 📖 Usage
+
+| Step | Action | Details |
+|------|--------|---------|
+| **1** | 📤 Upload | Drag & drop PDF / PNG / JPG files (max 50MB each) |
+| **2** | 🔧 OCR | Toggle ON for scanned PDFs & images (~$0.001/page) |
+| **3** | 🤖 Mode | **Agentic RAG** (default, smart) or **Traditional RAG** (fast) |
+| **4** | 💬 Chat | Ask questions, select specific files via dropdown |
+| **5** | 🧠 Reasoning | Expand "Agent Reasoning Steps" to see agent thinking |
+
+<br>
+
+---
+
+<br>
 
 ## 📁 Project Structure
 
 ```
 📦 DeepSeek-Simple-Chatbot
-├── 📄 app.py               # Gradio UI with mode toggle & reasoning display
-├── 📄 agentic_rag.py        # LangGraph Agentic RAG workflow (6 nodes)
-├── 📄 rag.py               # RAG system with hybrid search + agentic integration
-├── 📄 llm.py               # Groq LLM wrapper + agentic methods
-├── 📄 pdf_ocr_loader.py    # PDF loader with OCR support
-├── 📄 requirements.txt     # Python dependencies
-├── 📄 environment.yaml     # Conda environment config
-└── 📄 .env                 # API keys (create manually)
+│
+├── 🎯 app.py               → Gradio UI, mode toggle, reasoning panel
+├── 🤖 agentic_rag.py        → LangGraph workflow (6 agent nodes)
+├── 🔍 rag.py               → Hybrid RAG engine + agentic integration
+├── 🧠 llm.py               → Groq LLM wrapper + 5 agentic methods
+├── 📄 pdf_ocr_loader.py    → PDF/image loader with DeepSeek OCR
+│
+├── 📋 requirements.txt     → Python dependencies
+├── 📋 environment.yaml     → Conda environment config
+└── 🔑 .env                 → API keys (create manually)
 ```
 
+<br>
+
 ---
+
+<br>
 
 ## 💰 Pricing
 
-| Operation | Cost |
-|-----------|------|
-| PDF Text Extraction | **Free** |
-| OCR per Page | ~$0.001 |
-| Image OCR | ~$0.001 |
-| LLM (Groq) | **Free** |
+| Operation | Cost | Notes |
+|-----------|------|-------|
+| 📄 PDF Text Extraction | **Free** | Built-in PyMuPDF |
+| 👁️ OCR (per page) | ~$0.001 | DeepSeek via Replicate |
+| 🤖 LLM Inference | **Free** | Groq API (rate limited) |
+| 🔍 Embeddings | **Free** | Local sentence-transformers |
 
-> **Note:** Agentic RAG uses ~2-4x more API calls than Traditional RAG due to query routing, document grading, and hallucination checking. Groq API is free so this has no cost impact.
+> **💡 Tip:** Agentic RAG uses ~2-4x more LLM calls than Traditional RAG for routing, grading, and hallucination checking — but since Groq is free, there's **no extra cost**.
+
+<br>
 
 ---
 
+<br>
+
+## 🛠️ Tech Stack
+
+<p align="center">
+  <img src="https://img.shields.io/badge/LangChain-Framework-1C3C3C?style=flat-square&logo=langchain&logoColor=white" alt="LangChain">
+  <img src="https://img.shields.io/badge/LangGraph-Agent_Orchestration-8B5CF6?style=flat-square" alt="LangGraph">
+  <img src="https://img.shields.io/badge/ChromaDB-Vector_Store-00A67E?style=flat-square" alt="ChromaDB">
+  <img src="https://img.shields.io/badge/Sentence_Transformers-Embeddings-FF6F00?style=flat-square" alt="Sentence Transformers">
+  <img src="https://img.shields.io/badge/BM25-Keyword_Search-2196F3?style=flat-square" alt="BM25">
+  <img src="https://img.shields.io/badge/Groq-LLM_API-F55036?style=flat-square&logo=groq" alt="Groq">
+  <img src="https://img.shields.io/badge/Gradio-Web_UI-FF6F00?style=flat-square&logo=gradio" alt="Gradio">
+  <img src="https://img.shields.io/badge/Replicate-OCR_API-0A0A0A?style=flat-square" alt="Replicate">
+</p>
+
+<br>
+
+---
+
+<br>
+
 ## 📜 License
 
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+
+<br>
 
 ---
 
 <div align="center">
 
+<br>
+
 **Made with ❤️ by [thanguetvnu10092003](https://github.com/thanguetvnu10092003)**
+
+⭐ Star this repo if you find it useful!
 
 </div>
