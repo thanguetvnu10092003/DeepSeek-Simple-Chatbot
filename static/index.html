@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF RAG DeepSeek OCR Chatbot</title>
+    <meta name="description" content="Chat with PDF and images using AI - DeepSeek OCR + RAG">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- ===== SIDEBAR ===== -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h1 class="logo">DeepSeek RAG</h1>
+                <button class="btn-new-chat" id="btn-new-chat" title="New Chat">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    <span>New Chat</span>
+                </button>
+            </div>
+
+            <!-- Conversations -->
+            <div class="sidebar-section">
+                <div class="section-label">Chat History</div>
+                <div class="conversation-list" id="conversation-list">
+                    <!-- Rendered by JS -->
+                </div>
+            </div>
+
+            <!-- Upload -->
+            <div class="sidebar-section sidebar-upload">
+                <div class="section-label">Upload Documents</div>
+                <div class="upload-zone" id="upload-zone">
+                    <input type="file" id="file-input" multiple accept=".pdf,.png,.jpg,.jpeg" hidden>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="upload-icon">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <p>Drag & drop or click to select files</p>
+                    <span class="upload-hint">PDF, PNG, JPG — Max 50MB</span>
+                </div>
+                <div class="upload-options">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="ocr-toggle">
+                        <span class="toggle-slider"></span>
+                        <span>Paid OCR (~$0.001/page)</span>
+                    </label>
+                </div>
+                <button class="btn-upload" id="btn-upload" disabled>
+                    <span>Process Files</span>
+                </button>
+                <div class="upload-status" id="upload-status"></div>
+            </div>
+
+            <!-- Files in DB -->
+            <div class="sidebar-section">
+                <div class="section-label">Uploaded Files</div>
+                <div class="file-list" id="file-list">
+                    <span class="empty-hint">No files yet</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- ===== MAIN CHAT AREA ===== -->
+        <main class="main-area">
+            <!-- Top bar -->
+            <header class="chat-header">
+                <button class="btn-toggle-sidebar" id="btn-toggle-sidebar" title="Toggle sidebar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                </button>
+                <div class="header-controls">
+                    <div class="custom-file-selector" id="custom-file-selector">
+                        <button class="file-selector-btn" id="file-selector-btn" title="Select files to query">
+                            <span id="file-selector-text">All Files</span>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </button>
+                        <div class="file-selector-dropdown" id="file-selector-dropdown">
+                            <div class="file-selector-header">Select files for context</div>
+                            <div class="file-list-container" id="custom-file-list">
+                                <!-- JS will populate -->
+                            </div>
+                        </div>
+                    </div>
+                    <label class="toggle-label agentic-toggle">
+                        <input type="checkbox" id="agentic-toggle" checked>
+                        <span class="toggle-slider"></span>
+                        <span>Agentic RAG</span>
+                    </label>
+                </div>
+                <div class="header-title" id="header-title">New Chat</div>
+            </header>
+
+            <!-- Chat messages -->
+            <div class="chat-messages" id="chat-messages">
+                <div class="welcome-screen" id="welcome-screen">
+                    <div class="welcome-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                    </div>
+                    <h2>PDF RAG DeepSeek OCR</h2>
+                    <p>Upload PDF documents or images, then ask questions.</p>
+                    <div class="welcome-tips">
+                        <div class="tip">
+                            <strong>Upload</strong>
+                            <span>Drag & drop files to sidebar</span>
+                        </div>
+                        <div class="tip">
+                            <strong>Chat</strong>
+                            <span>Ask questions about documents</span>
+                        </div>
+                        <div class="tip">
+                            <strong>OCR</strong>
+                            <span>Enable OCR for images/scans</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reasoning panel (collapsible) -->
+            <div class="reasoning-panel" id="reasoning-panel" style="display: none;">
+                <button class="reasoning-toggle" id="reasoning-toggle">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                    <span>Agent Reasoning Steps</span>
+                </button>
+                <div class="reasoning-content" id="reasoning-content"></div>
+            </div>
+
+            <!-- Input area -->
+            <div class="chat-input-area">
+                <div class="input-wrapper">
+                    <textarea
+                        id="msg-input"
+                        placeholder="Type your question..."
+                        rows="1"
+                    ></textarea>
+                    <button class="btn-send" id="btn-send" title="Send (Enter)">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                </div>
+                <div class="input-hint">Enter to send • Shift+Enter for new line</div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Preview Modal -->
+    <div class="preview-modal" id="preview-modal">
+        <div class="preview-modal-content">
+            <header class="preview-header">
+                <h3 id="preview-title">Document Preview</h3>
+                <button class="btn-close-preview" id="btn-close-preview">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </header>
+            <div class="preview-body" id="preview-body">
+                <!-- iframe or img will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

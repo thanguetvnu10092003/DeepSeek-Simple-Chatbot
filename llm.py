@@ -367,3 +367,37 @@ Return JSON:
         except Exception as e:
             logger.warning(f"Hallucination check error: {e}")
             return True  # Default to trusting the answer
+
+    def generate_chat_title(self, first_message: str) -> str:
+        """
+        Tạo tiêu đề ngắn gọn cho cuộc trò chuyện dựa trên tin nhắn đầu tiên.
+        Trả về tiêu đề tối đa 10 từ.
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[{
+                    "role": "user",
+                    "content": f"""Tạo tiêu đề ngắn gọn (tối đa 8 từ) cho cuộc trò chuyện bắt đầu bằng tin nhắn sau.
+Chỉ trả về tiêu đề, không giải thích, không dấu ngoặc kép.
+
+Tin nhắn: "{first_message[:300]}"
+
+Tiêu đề:"""
+                }],
+                temperature=0.3,
+                max_tokens=30,
+            )
+            title = response.choices[0].message.content.strip().strip('"').strip("'")
+            # Giới hạn độ dài
+            words = title.split()
+            if len(words) > 10:
+                title = " ".join(words[:10])
+            return title if title else "Cuộc trò chuyện mới"
+        except Exception as e:
+            logger.warning(f"Generate chat title error: {e}")
+            # Fallback: dùng phần đầu tin nhắn
+            truncated = first_message[:50].strip()
+            if len(first_message) > 50:
+                truncated += "..."
+            return truncated

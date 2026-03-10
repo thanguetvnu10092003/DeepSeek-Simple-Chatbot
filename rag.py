@@ -179,6 +179,54 @@ class LangChainPDFRAG:
             logger.error(f"Error getting file list: {e}")
             return []
 
+    def delete_file(self, filename: str):
+        """Delete a file from both vectorstores and BM25 index"""
+        logger.info(f"Deleting file: {filename}")
+        
+        # 1. Delete from ChromaDB
+        try:
+            if self.vectorstore:
+                data = self.vectorstore.get()
+                ids_to_delete = []
+                for i, metadata in enumerate(data['metadatas']):
+                    if metadata and metadata.get('filename') == filename:
+                        ids_to_delete.append(data['ids'][i])
+                
+                if ids_to_delete:
+                    self.vectorstore.delete(ids=ids_to_delete)
+                    logger.info(f"Deleted {len(ids_to_delete)} small chunks from vectorstore")
+                
+            if self.vectorstore_large:
+                data_large = self.vectorstore_large.get()
+                ids_to_delete_large = []
+                for i, metadata in enumerate(data_large['metadatas']):
+                    if metadata and metadata.get('filename') == filename:
+                        ids_to_delete_large.append(data_large['ids'][i])
+                
+                if ids_to_delete_large:
+                    self.vectorstore_large.delete(ids=ids_to_delete_large)
+                    logger.info(f"Deleted {len(ids_to_delete_large)} large chunks from vectorstore")
+                    
+        except Exception as e:
+            logger.error(f"Error deleting from ChromaDB: {e}")
+
+        # 2. Delete from BM25
+        try:
+            if self.all_documents:
+                original_count = len(self.all_documents)
+                self.all_documents = [doc for doc in self.all_documents if doc.metadata.get('filename') != filename]
+                
+                if len(self.all_documents) < original_count:
+                    if self.all_documents:
+                        self.bm25_retriever = BM25Retriever.from_documents(self.all_documents)
+                        self.bm25_retriever.k = 20
+                        logger.info(f"Rebuilt BM25 index without {filename}, new doc count: {len(self.all_documents)}")
+                    else:
+                        self.bm25_retriever = None
+                        logger.info(f"BM25 index is now empty")
+        except Exception as e:
+            logger.error(f"Error updating BM25 index: {e}")
+
     def _detect_mentioned_files(self, question: str, all_files: list) -> list:
         """Detect which files are mentioned in the question"""
         mentioned = []

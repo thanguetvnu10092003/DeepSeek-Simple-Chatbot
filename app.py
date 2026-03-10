@@ -33,6 +33,7 @@ from pathlib import Path
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from rag import LangChainPDFRAG
+from chat_history import ChatHistoryManager
 
 # Setup logging
 logging.basicConfig(
@@ -223,10 +224,14 @@ def process_files(files, enable_ocr, uploaded_files, progress=gr.Progress()):
     return summary, gr.update(value=file_list), uploaded_files, gr.update(choices=all_db_files, value=[])
 
 
-def chat_response(message, history, selected_files, use_agentic):
+def chat_response(message, history, selected_files, use_agentic, current_conv_id):
     """Handle chat messages with optional file filter and RAG mode selection"""
     if not message.strip():
-        return history, ""
+        return history, "", current_conv_id, gr.update()
+
+    # Tạo conversation mới nếu chưa có
+    if not current_conv_id:
+        current_conv_id = history_manager.create_conversation()
 
     history.append({"role": "user", "content": message})
     
@@ -239,7 +244,7 @@ def chat_response(message, history, selected_files, use_agentic):
             history.append({"role": "assistant", "content": f"[{mode_label}] Đang tìm kiếm trong **{len(selected_files)}** file..."})
     else:
         history.append({"role": "assistant", "content": f"[{mode_label}] Đang phân tích câu hỏi (tất cả file)..."})
-    yield history, ""
+    yield history, "", current_conv_id, gr.update()
 
     start_time = time.time()
     
@@ -292,16 +297,76 @@ def chat_response(message, history, selected_files, use_agentic):
     response += f"\n*Thời gian xử lý: {elapsed:.2f}s | Mode: {mode_label}*"
 
     history[-1]["content"] = response
-    yield history, reasoning_text
+
+    # Lưu lịch sử chat
+    history_manager.save_conversation(current_conv_id, history)
+
+    # Auto-naming: nếu đây là tin nhắn đầu tiên (history chỉ có 2 items: user + assistant)
+    conv_list_update = gr.update()
+    if len(history) == 2:
+        try:
+            title = rag_system.llm.generate_chat_title(message)
+            history_manager.update_title(current_conv_id, title)
+            conv_list_update = gr.update(choices=_get_conv_choices(), value=current_conv_id)
+        except Exception as e:
+            logger.warning(f"Auto-naming failed: {e}")
+
+    yield history, reasoning_text, current_conv_id, conv_list_update
 
 
-def clear_chat():
-    """Clear chat history only"""
-    return []
+def _get_conv_choices():
+    """Build dropdown choices from conversation index."""
+    convs = history_manager.list_conversations()
+    choices = []
+    for c in convs:
+        title = c.get("title", "Cuộc trò chuyện mới")
+        # Cắt ngắn title quá dài
+        if len(title) > 45:
+            title = title[:42] + "..."
+        choices.append((title, c["id"]))
+    return choices
 
 
-# Create RAG system instance (global variable to avoid gr.State schema issues)
+def new_conversation():
+    """Tạo cuộc trò chuyện mới."""
+    conv_id = history_manager.create_conversation()
+    choices = _get_conv_choices()
+    return [], conv_id, gr.update(choices=choices, value=conv_id), "*Gửi câu hỏi với Agentic RAG để xem reasoning steps*"
+
+
+def select_conversation(conv_id):
+    """Chọn cuộc trò chuyện từ sidebar."""
+    if not conv_id:
+        return [], None, gr.update(), ""
+    
+    conv_data = history_manager.load_conversation(conv_id)
+    if conv_data:
+        messages = conv_data.get("messages", [])
+        return messages, conv_id, gr.update(), ""
+    
+    return [], conv_id, gr.update(), ""
+
+
+def delete_conversation(current_conv_id):
+    """Xóa cuộc trò chuyện hiện tại và chuyển sang cuộc mới."""
+    if current_conv_id:
+        history_manager.delete_conversation(current_conv_id)
+    
+    # Tạo cuộc trò chuyện mới hoặc chọn cuộc đầu tiên
+    convs = history_manager.list_conversations()
+    if convs:
+        next_id = convs[0]["id"]
+        conv_data = history_manager.load_conversation(next_id)
+        messages = conv_data.get("messages", []) if conv_data else []
+        choices = _get_conv_choices()
+        return messages, next_id, gr.update(choices=choices, value=next_id), ""
+    else:
+        return new_conversation()
+
+
+# Create RAG system and history manager instances
 rag_system = create_rag_system()
+history_manager = ChatHistoryManager()
 
 CSS = """
     .status-box {padding: 15px; border-radius: 8px; background: #1e293b; color: #f1f5f9;}
@@ -317,10 +382,15 @@ CSS = """
     .mode-badge {display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.8em; font-weight: bold;}
     .mode-agentic {background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white;}
     .mode-traditional {background: linear-gradient(135deg, #059669, #10b981); color: white;}
+    
+    /* Chat history sidebar */
+    .history-sidebar {border-right: 1px solid #334155; padding-right: 10px;}
+    .history-sidebar .new-chat-btn {margin-bottom: 10px;}
 """
 
 with gr.Blocks(title="PDF RAG DeepSeekOCR Chatbot", theme=gr.themes.Soft(), css=CSS) as demo:
     files_state = gr.State([])
+    current_conv_id_state = gr.State(None)
     
     gr.Markdown("""
     # PDF RAG DeepSeekOCR Chatbot
@@ -330,7 +400,8 @@ with gr.Blocks(title="PDF RAG DeepSeekOCR Chatbot", theme=gr.themes.Soft(), css=
     with gr.Tabs():
         with gr.Tab("Chat"):
             with gr.Row():
-                with gr.Column(scale=1):
+                # ===== Sidebar: Upload + Chat History =====
+                with gr.Column(scale=1, elem_classes="history-sidebar"):
                     gr.Markdown("### Upload Tài Liệu")
                     
                     file_input = gr.File(
@@ -351,7 +422,25 @@ with gr.Blocks(title="PDF RAG DeepSeekOCR Chatbot", theme=gr.themes.Soft(), css=
                     
                     gr.Markdown("---")
                     file_list = gr.Markdown("*Chưa có file nào*", elem_classes="file-list-box")
+                    
+                    gr.Markdown("---")
+                    
+                    # ===== Chat History Section =====
+                    gr.Markdown("### Lịch sử trò chuyện")
+                    
+                    new_chat_btn = gr.Button("Cuộc trò chuyện mới", variant="primary", size="sm", elem_classes="new-chat-btn")
+                    
+                    conv_dropdown = gr.Dropdown(
+                        choices=[],
+                        value=None,
+                        label="Chọn cuộc trò chuyện",
+                        interactive=True,
+                        elem_id="conv-history-dropdown"
+                    )
+                    
+                    delete_conv_btn = gr.Button("Xóa cuộc trò chuyện", variant="stop", size="sm")
                 
+                # ===== Main Chat Area =====
                 with gr.Column(scale=2):
                     gr.Markdown("### Chat với Tài Liệu")
                     
@@ -383,9 +472,6 @@ with gr.Blocks(title="PDF RAG DeepSeekOCR Chatbot", theme=gr.themes.Soft(), css=
                             container=False
                         )
                         submit_btn = gr.Button("Gửi", scale=1, variant="primary")
-                    
-                    with gr.Row():
-                        clear_chat_btn = gr.Button("Xóa Chat", scale=1)
                     
                     with gr.Accordion("Agent Reasoning Steps", open=False):
                         reasoning_display = gr.Markdown(
@@ -423,12 +509,21 @@ with gr.Blocks(title="PDF RAG DeepSeekOCR Chatbot", theme=gr.themes.Soft(), css=
 - **Tìm tất cả file**: Để trống dropdown
 - **Xem reasoning**: Mở accordion "Agent Reasoning Steps"
 
-### 5. Lưu ý
+### 5. Lịch sử trò chuyện
+- **Tạo mới**: Click "Cuộc trò chuyện mới" ở sidebar
+- **Chuyển đổi**: Chọn cuộc trò chuyện từ dropdown
+- **Tên tự động**: Hệ thống tự đặt tên khi bạn gửi tin nhắn đầu tiên
+- **Xóa**: Click "Xóa cuộc trò chuyện" để xóa cuộc hiện tại
+
+### 6. Lưu ý
 - Agentic RAG chậm hơn (~2-4x) nhưng chính xác hơn cho câu hỏi phức tạp
 - File đã upload sẽ được lưu cho các session sau
 - Hệ thống tự động phát hiện file trùng lặp
 - Với ảnh, phải bật OCR thì mới xử lý được
+- Lịch sử trò chuyện được lưu tự động
             """)
+
+    # ===== Event Handlers =====
 
     process_btn.click(
         fn=process_files,
@@ -436,10 +531,11 @@ with gr.Blocks(title="PDF RAG DeepSeekOCR Chatbot", theme=gr.themes.Soft(), css=
         outputs=[status_output, file_list, files_state, file_filter]
     )
 
+    # Chat submit - now includes conv_id management
     msg_input.submit(
         fn=chat_response,
-        inputs=[msg_input, chatbot, file_filter, agentic_toggle],
-        outputs=[chatbot, reasoning_display]
+        inputs=[msg_input, chatbot, file_filter, agentic_toggle, current_conv_id_state],
+        outputs=[chatbot, reasoning_display, current_conv_id_state, conv_dropdown]
     ).then(
         fn=lambda: "",
         outputs=[msg_input]
@@ -447,20 +543,35 @@ with gr.Blocks(title="PDF RAG DeepSeekOCR Chatbot", theme=gr.themes.Soft(), css=
 
     submit_btn.click(
         fn=chat_response,
-        inputs=[msg_input, chatbot, file_filter, agentic_toggle],
-        outputs=[chatbot, reasoning_display]
+        inputs=[msg_input, chatbot, file_filter, agentic_toggle, current_conv_id_state],
+        outputs=[chatbot, reasoning_display, current_conv_id_state, conv_dropdown]
     ).then(
         fn=lambda: "",
         outputs=[msg_input]
     )
 
-    clear_chat_btn.click(
-        fn=clear_chat,
-        outputs=[chatbot]
+    # New conversation
+    new_chat_btn.click(
+        fn=new_conversation,
+        outputs=[chatbot, current_conv_id_state, conv_dropdown, reasoning_display]
+    )
+
+    # Select conversation from dropdown
+    conv_dropdown.change(
+        fn=select_conversation,
+        inputs=[conv_dropdown],
+        outputs=[chatbot, current_conv_id_state, conv_dropdown, reasoning_display]
+    )
+
+    # Delete conversation
+    delete_conv_btn.click(
+        fn=delete_conversation,
+        inputs=[current_conv_id_state],
+        outputs=[chatbot, current_conv_id_state, conv_dropdown, reasoning_display]
     )
 
     def load_initial_state():
-        """Load initial state including file list from vectorstore"""
+        """Load initial state including file list from vectorstore and chat history"""
         existing_files = rag_system.get_all_files()
         
         if existing_files:
@@ -472,11 +583,36 @@ with gr.Blocks(title="PDF RAG DeepSeekOCR Chatbot", theme=gr.themes.Soft(), css=
             file_list_text = "*Chưa có file nào*"
             status = "**Chatbot đã sẵn sàng!**\n\nBật/tắt OCR theo nhu cầu để tiết kiệm chi phí."
         
-        return status, file_list_text, gr.update(choices=existing_files, value=[])
+        # Load chat history
+        conv_choices = _get_conv_choices()
+        convs = history_manager.list_conversations()
+        
+        if convs:
+            # Load cuộc trò chuyện gần nhất
+            latest_id = convs[0]["id"]
+            conv_data = history_manager.load_conversation(latest_id)
+            messages = conv_data.get("messages", []) if conv_data else []
+            return (
+                status,
+                file_list_text,
+                gr.update(choices=existing_files, value=[]),
+                gr.update(choices=conv_choices, value=latest_id),
+                messages,
+                latest_id,
+            )
+        else:
+            return (
+                status,
+                file_list_text,
+                gr.update(choices=existing_files, value=[]),
+                gr.update(choices=conv_choices, value=None),
+                [],
+                None,
+            )
 
     demo.load(
         fn=load_initial_state,
-        outputs=[status_output, file_list, file_filter]
+        outputs=[status_output, file_list, file_filter, conv_dropdown, chatbot, current_conv_id_state]
     )
 
 if __name__ == "__main__":
