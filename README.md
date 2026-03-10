@@ -17,7 +17,7 @@ license: mit
 
 <p align="center">
   <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python"></a>
-  <a href="https://gradio.app"><img src="https://img.shields.io/badge/Gradio-5.x-FF6F00?style=for-the-badge&logo=gradio&logoColor=white" alt="Gradio"></a>
+  <a href="https://fastapi.tiangolo.com"><img src="https://img.shields.io/badge/FastAPI-Backend-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI"></a>
   <a href="https://langchain-ai.github.io/langgraph/"><img src="https://img.shields.io/badge/LangGraph-Agentic_RAG-8B5CF6?style=for-the-badge&logo=chainlink&logoColor=white" alt="LangGraph"></a>
 </p>
 
@@ -72,6 +72,30 @@ license: mit
 - **Multi-file query** — search across selected files
 - **OCR support** — DeepSeek OCR for scanned PDFs & images
 - **Dual mode toggle** — switch Agentic ↔ Traditional RAG
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🌐 Modern Web Interface
+- **Custom dark-themed UI** — built with HTML/CSS/JS
+- **FastAPI backend** — REST API + SSE streaming
+- **Chat history** — persistent conversations with auto-naming
+- **File preview** — view uploaded PDFs & images in a modal
+- **File management** — upload, select, and delete files
+- **Responsive design** — works on desktop & tablet
+
+</td>
+<td width="50%">
+
+### 📂 Document Management
+- **Drag & drop uploads** — PDF, PNG, JPG support
+- **Custom file selector** — checkbox dropdown with preview
+- **File preview modal** — view documents inline (PDF/image)
+- **File deletion** — remove from ChromaDB, BM25 & disk
+- **Duplicate detection** — skip already-processed files
+- **OCR toggle** — enable/disable per upload batch
 
 </td>
 </tr>
@@ -185,11 +209,26 @@ REPLICATE_API_TOKEN=your_replicate_token
 
 ### 3️⃣ Launch
 
+**Web UI (FastAPI — recommended):**
+
+```bash
+python server.py
+```
+
+Open **http://localhost:8000** in your browser 🎉
+
+<details>
+<summary><b>Legacy: Gradio UI</b></summary>
+
 ```bash
 python app.py
 ```
 
-Open **http://127.0.0.1:7860** in your browser 🎉
+Open **http://127.0.0.1:7860** in your browser.
+
+> ⚠️ The Gradio UI is the original interface. The FastAPI web UI provides a more modern experience with chat history, file preview, and file deletion features.
+
+</details>
 
 <br>
 
@@ -204,8 +243,11 @@ Open **http://127.0.0.1:7860** in your browser 🎉
 | **1** | 📤 Upload | Drag & drop PDF / PNG / JPG files (max 50MB each) |
 | **2** | 🔧 OCR | Toggle ON for scanned PDFs & images (~$0.001/page) |
 | **3** | 🤖 Mode | **Agentic RAG** (default, smart) or **Traditional RAG** (fast) |
-| **4** | 💬 Chat | Ask questions, select specific files via dropdown |
-| **5** | 🧠 Reasoning | Expand "Agent Reasoning Steps" to see agent thinking |
+| **4** | 📂 Select | Use the custom dropdown to select specific files to query |
+| **5** | 👁️ Preview | Click the eye icon to preview uploaded PDF/images inline |
+| **6** | 🗑️ Delete | Click the trash icon to remove a file from the system |
+| **7** | 💬 Chat | Ask questions about your documents |
+| **8** | 🧠 Reasoning | Expand "Agent Reasoning Steps" to see agent thinking |
 
 <br>
 
@@ -218,15 +260,22 @@ Open **http://127.0.0.1:7860** in your browser 🎉
 ```
 📦 DeepSeek-Simple-Chatbot
 │
-├── 🎯 app.py               → Gradio UI, mode toggle, reasoning panel
+├── 🌐 server.py             → FastAPI backend (REST API + SSE streaming)
+├── 🎯 app.py                → Legacy Gradio UI
 ├── 🤖 agentic_rag.py        → LangGraph workflow (6 agent nodes)
-├── 🔍 rag.py               → Hybrid RAG engine + agentic integration
-├── 🧠 llm.py               → Groq LLM wrapper + 5 agentic methods
-├── 📄 pdf_ocr_loader.py    → PDF/image loader with DeepSeek OCR
+├── 🔍 rag.py                → Hybrid RAG engine + file deletion
+├── 🧠 llm.py                → Groq LLM wrapper + 5 agentic methods
+├── 📄 pdf_ocr_loader.py     → PDF/image loader with DeepSeek OCR
+├── 💾 chat_history.py       → Persistent conversation manager
 │
-├── 📋 requirements.txt     → Python dependencies
-├── 📋 environment.yaml     → Conda environment config
-└── 🔑 .env                 → API keys (create manually)
+├── 📂 static/
+│   ├── index.html            → Main page (dark theme, ChatGPT-like layout)
+│   ├── style.css             → Custom CSS (responsive, animations)
+│   └── app.js                → Frontend logic (SSE, file mgmt, preview modal)
+│
+├── 📋 requirements.txt      → Python dependencies
+├── 📋 environment.yaml      → Conda environment config
+└── 🔑 .env                  → API keys (create manually)
 ```
 
 <br>
@@ -255,13 +304,14 @@ Open **http://127.0.0.1:7860** in your browser 🎉
 ## 🛠️ Tech Stack
 
 <p align="center">
+  <img src="https://img.shields.io/badge/FastAPI-Backend-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI">
   <img src="https://img.shields.io/badge/LangChain-Framework-1C3C3C?style=flat-square&logo=langchain&logoColor=white" alt="LangChain">
   <img src="https://img.shields.io/badge/LangGraph-Agent_Orchestration-8B5CF6?style=flat-square" alt="LangGraph">
   <img src="https://img.shields.io/badge/ChromaDB-Vector_Store-00A67E?style=flat-square" alt="ChromaDB">
   <img src="https://img.shields.io/badge/Sentence_Transformers-Embeddings-FF6F00?style=flat-square" alt="Sentence Transformers">
   <img src="https://img.shields.io/badge/BM25-Keyword_Search-2196F3?style=flat-square" alt="BM25">
   <img src="https://img.shields.io/badge/Groq-LLM_API-F55036?style=flat-square&logo=groq" alt="Groq">
-  <img src="https://img.shields.io/badge/Gradio-Web_UI-FF6F00?style=flat-square&logo=gradio" alt="Gradio">
+  <img src="https://img.shields.io/badge/SSE-Streaming-FF6F00?style=flat-square" alt="SSE">
   <img src="https://img.shields.io/badge/Replicate-OCR_API-0A0A0A?style=flat-square" alt="Replicate">
 </p>
 
