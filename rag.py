@@ -302,23 +302,24 @@ class LangChainPDFRAG:
         
         context = "\n\n---\n\n".join(context_parts)
         
-        # Single-file focused prompt
+        # Single-file focused prompt using Advanced Architecture
         prompt = ChatPromptTemplate.from_template(
-            "You are an elite document analysis AI assistant. Your primary goal is to provide accurate, "
-            "well-structured, and highly relevant answers based strictly on the provided context.\n\n"
-            "=== STRICT CONSTRAINTS ===\n"
+            "<persona>\n"
+            "You are an elite document analysis AI assistant.\n"
+            "Your primary goal is to provide accurate, well-structured, and highly relevant answers based strictly on the provided context.\n"
+            "</persona>\n\n"
+            "<constraints>\n"
             "1. FACTUALITY: You MUST ONLY use the information included in the <context> tags.\n"
             "2. NO HALLUCINATION: If the answer is not in the context, explicitly state: 'I cannot find the information in the provided documents.' DO NOT guess or make up facts.\n"
             "3. CITATIONS: You MUST cite your sources using the exact format: `[Page X]`.\n"
-            "4. FORMATTING: Use Markdown. Use boldizing for key terms, bullet points for lists, and keep paragraphs concise.\n\n"
-            "=== TASK SPECIFIC ===\n"
+            "4. FORMATTING: Use Markdown. Use boldizing for key terms, bullet points for lists, and keep paragraphs concise.\n"
+            "5. NO PREAMBLES: Directly Answer the query without conversational filler (e.g. 'Here is the answer').\n"
+            "</constraints>\n\n"
+            "<task_specific>\n"
             f"You are analyzing a single specific file: **{target_file}**.\n"
-            "Focus entirely on this file's context. Ensure all citations accurately map to the provided page numbers.\n\n"
-            "=== CONTEXT DATA ===\n"
-            "Read the following context carefully:\n"
+            "Focus entirely on this file's context. Ensure all citations accurately map to the provided page numbers.\n"
+            "</task_specific>\n\n"
             "<context>\n{context}\n</context>\n\n"
-            "=== USER QUERY ===\n"
-            "Based on the context above, answer the query:\n"
             "<user_query>\n{question}\n</user_query>\n\n"
             "Answer:"
         )
@@ -398,24 +399,25 @@ class LangChainPDFRAG:
         
         context = "\n\n---\n\n".join(context_parts)
         
-        # Multi-file focused prompt
+        # Multi-file focused prompt using Advanced Architecture
         file_list_str = ", ".join(target_files)
         prompt = ChatPromptTemplate.from_template(
-            "You are an elite document analysis AI assistant. Your primary goal is to provide accurate, "
-            "well-structured, and highly relevant answers based strictly on the provided context.\n\n"
-            "=== STRICT CONSTRAINTS ===\n"
+            "<persona>\n"
+            "You are an elite document analysis AI assistant.\n"
+            "Your primary goal is to provide accurate, well-structured, and highly relevant answers based strictly on the provided context.\n"
+            "</persona>\n\n"
+            "<constraints>\n"
             "1. FACTUALITY: You MUST ONLY use the information included in the <context> tags.\n"
             "2. NO HALLUCINATION: If the answer is not in the context, explicitly state: 'I cannot find the information in the provided documents.' DO NOT guess or make up facts.\n"
             "3. CITATIONS: You MUST cite your sources using the exact format: `[File: name - Page X]`.\n"
-            "4. FORMATTING: Use Markdown. Use boldizing for key terms, bullet points for lists, and keep paragraphs concise.\n\n"
-            "=== TASK SPECIFIC ===\n"
+            "4. FORMATTING: Use Markdown. Use boldizing for key terms, bullet points for lists, and keep paragraphs concise.\n"
+            "5. NO PREAMBLES: Directly Answer the query without conversational filler.\n"
+            "</constraints>\n\n"
+            "<task_specific>\n"
             f"You are analyzing multiple files: **{file_list_str}**.\n"
-            "Synthesize information across these files. When contrasting or combining data, explicitly mention which file the information came from to avoid confusion.\n\n"
-            "=== CONTEXT DATA ===\n"
-            "Read the following context carefully:\n"
+            "Synthesize information across these files. When contrasting or combining data, explicitly mention which file the information came from to avoid confusion.\n"
+            "</task_specific>\n\n"
             "<context>\n{context}\n</context>\n\n"
-            "=== USER QUERY ===\n"
-            "Based on the context above, answer the query:\n"
             "<user_query>\n{question}\n</user_query>\n\n"
             "Answer:"
         )
@@ -639,51 +641,56 @@ class LangChainPDFRAG:
 
         context = "\n\n---\n\n".join(context_parts)
 
-        # Select prompt based on query type
+        # Select prompt base using Advanced Architecture
         base_persona = (
-            "You are an elite document analysis AI assistant. Your primary goal is to provide accurate, "
-            "well-structured, and highly relevant answers based strictly on the provided context.\n\n"
-            "=== STRICT CONSTRAINTS ===\n"
+            "<persona>\n"
+            "You are an elite document analysis AI assistant.\n"
+            "Your primary goal is to provide accurate, well-structured, and highly relevant answers based strictly on the provided context.\n"
+            "</persona>\n\n"
+            "<constraints>\n"
             "1. FACTUALITY: You MUST ONLY use the information included in the <context> tags.\n"
             "2. NO HALLUCINATION: If the answer is not in the context, explicitly state: 'I cannot find the information in the provided documents.' DO NOT guess or make up facts.\n"
             "3. CITATIONS: You MUST cite your sources using the exact format: `[File: name - Page X]`.\n"
-            "4. FORMATTING: Use Markdown."
+            "4. FORMATTING: Use Markdown. Use boldizing for key terms.\n"
+            "5. NO PREAMBLES: Directly answer without filler.\n"
+            "</constraints>\n"
         )
 
         data_wrapper = (
-            "=== CONTEXT DATA ===\n"
             "<context>\n{context}\n</context>\n\n"
-            "=== USER QUERY ===\n"
             "<user_query>\n{question}\n</user_query>\n\n"
             "Answer:"
         )
 
         if query_type == "exercise":
             task_specific = (
-                "=== TASK SPECIFIC ===\n"
+                "<task_specific>\n"
                 "You are acting as an expert tutor guiding a student through an exercise or test problem.\n"
                 "- Step 1: Quote the original question/exercise clearly.\n"
                 "- Step 2: Solve the problem step-by-step, explaining the underlying logic and reasoning.\n"
                 "- Step 3: If there's a table or list to be filled out, fill it completely based on the context.\n"
+                "</task_specific>\n"
             )
-            prompt = ChatPromptTemplate.from_template(f"{base_persona}\n\n{task_specific}\n\n{data_wrapper}")
+            prompt = ChatPromptTemplate.from_template(f"{base_persona}\n{task_specific}\n{data_wrapper}")
         elif query_type == "overview":
             task_specific = (
-                "=== TASK SPECIFIC ===\n"
+                "<task_specific>\n"
                 "You have been asked to provide an overview or summary.\n"
-                "- There are {num_files} files: {file_list}\n"
+                "- There are {{num_files}} files: {{file_list}}\n"
                 "- Extract the main themes or core arguments from EACH file provided in the context.\n"
                 "- Compare, contrast, and relate the information between different files if applicable.\n"
                 "- Present the final output using clear structured sections (e.g., using Level 2/3 Markdown Headers).\n"
+                "</task_specific>\n"
             )
-            prompt = ChatPromptTemplate.from_template(f"{base_persona}\n\n{task_specific}\n\n{data_wrapper}")
+            prompt = ChatPromptTemplate.from_template(f"{base_persona}\n{task_specific}\n{data_wrapper}")
         else:
             task_specific = (
-                "=== TASK SPECIFIC ===\n"
+                "<task_specific>\n"
                 "This is a standard informational query.\n"
                 "Provide a direct, comprehensive, and clear answer. Avoid unnecessary fluff and get straight to the point.\n"
+                "</task_specific>\n"
             )
-            prompt = ChatPromptTemplate.from_template(f"{base_persona}\n\n{task_specific}\n\n{data_wrapper}")
+            prompt = ChatPromptTemplate.from_template(f"{base_persona}\n{task_specific}\n{data_wrapper}")
 
         # Build chain
         if query_type == "overview":

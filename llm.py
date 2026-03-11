@@ -118,15 +118,17 @@ class GroqLLM(LLM):
                 model=self.model_name,
                 messages=[{
                     "role": "user",
-                    "content": f"""You are an elite NLP Query Classifier.
+                    "content": f"""<persona>
+You are an elite NLP Query Classifier.
+</persona>
+
+<constraints>
+1. FORMATTING: You MUST return ONLY a valid JSON object.
+2. NO HALLUCINATION: Do not include markdown codeblocks or any additional explanations.
+</constraints>
+
+<task_specific>
 Analyze the following user question and determine its type, complexity, and requirements.
-
-<user_query>
-{question}
-</user_query>
-
-=== OUTPUT REQUIREMENTS ===
-You MUST return ONLY a valid JSON object. Do not include markdown codeblocks or any additional explanations.
 
 JSON EXPLANATION:
 - "type": 
@@ -144,7 +146,12 @@ Example valid JSON output:
     "needs_all_files": false,
     "complexity": "medium",
     "needs_detail": true
-}}"""             }],
+}}
+</task_specific>
+
+<user_query>
+{question}
+</user_query>"""             }],
                 temperature=0.1,
                 max_tokens=150,
             )
@@ -186,12 +193,17 @@ Example valid JSON output:
                 model=self.model_name,
                 messages=[{
                     "role": "user",
-                    "content": f"""You are a smart Query Router.
-Determine if the given query is SIMPLE or COMPLEX.
+                    "content": f"""<persona>
+You are a smart Query Router.
+</persona>
 
-<user_query>
-{question}
-</user_query>
+<constraints>
+1. FORMATTING: You MUST return ONLY a valid JSON object.
+2. NO HALLUCINATION: Do not explain your answer outside the JSON payload.
+</constraints>
+
+<task_specific>
+Determine if the given query is SIMPLE or COMPLEX.
 
 === DEFINITIONS ===
 A question is COMPLEX if it:
@@ -200,14 +212,16 @@ A question is COMPLEX if it:
 - Needs multi-step reasoning.
 - Asks for analysis/synthesis across topics.
 
-=== OUTPUT REQUIREMENTS ===
-You MUST return ONLY a valid JSON object. Do not explain your answer outside the JSON payload.
-
 Expected JSON Format:
 {{
     "type": "simple" | "complex",
     "reasoning": "<brief explanation of why it is simple or complex>"
-}}"""
+}}
+</task_specific>
+
+<user_query>
+{question}
+</user_query>"""
                 }],
                 temperature=0.1,
                 max_tokens=100,
@@ -227,20 +241,27 @@ Expected JSON Format:
                 model=self.model_name,
                 messages=[{
                     "role": "user",
-                    "content": f"""You are an expert Query Decomposer.
+                    "content": f"""<persona>
+You are an expert Query Decomposer.
+</persona>
+
+<constraints>
+1. FORMATTING: You MUST return ONLY a valid JSON object without markdown formatting.
+2. NO PREAMBLES: Directly return the JSON.
+</constraints>
+
+<task_specific>
 Your task is to break down a complex question into 2 to 4 simpler, independent sub-questions that can be answered sequentially.
-
-<original_question>
-{question}
-</original_question>
-
-=== OUTPUT REQUIREMENTS ===
-You MUST return ONLY a valid JSON object without markdown formatting.
 
 Expected JSON Format:
 {{
     "sub_questions": ["<sub_question_1>", "<sub_question_2>"]
-}}"""
+}}
+</task_specific>
+
+<original_question>
+{question}
+</original_question>"""
                 }],
                 temperature=0.2,
                 max_tokens=300,
@@ -281,25 +302,32 @@ Expected JSON Format:
                     model=self.model_name,
                     messages=[{
                         "role": "user",
-                        "content": f"""You are a strict Document Relevance Grader.
+                        "content": f"""<persona>
+You are a strict Document Relevance Grader.
+</persona>
+
+<constraints>
+1. FORMATTING: You MUST return ONLY a valid JSON object.
+2. NO PREAMBLES: Directly return the JSON.
+</constraints>
+
+<task_specific>
 Determine if each document contains information relevant to answering the question.
-
-<user_query>
-{question}
-</user_query>
-
-<documents_to_grade>
-{docs_text}
-</documents_to_grade>
-
-=== OUTPUT REQUIREMENTS ===
-You MUST return ONLY a valid JSON object.
 Provide an array of booleans mapping 1-to-1 to the provided documents (true = relevant, false = irrelevant).
 
 Expected JSON Format:
 {{
     "grades": [true, false, true]
-}}"""
+}}
+</task_specific>
+
+<documents_to_grade>
+{docs_text}
+</documents_to_grade>
+
+<user_query>
+{question}
+</user_query>"""
                     }],
                     temperature=0.1,
                     max_tokens=200,
@@ -331,17 +359,25 @@ Expected JSON Format:
                 model=self.model_name,
                 messages=[{
                     "role": "user",
-                    "content": f"""You are an advanced Search Query Reformulator.
+                    "content": f"""<persona>
+You are an advanced Search Query Reformulator.
+</persona>
+
+<constraints>
+1. FORMATTING: Return ONLY the newly rewritten query string.
+2. NO PREAMBLES: Do not use quotes, JSON, or any conversational text.
+</constraints>
+
+<task_specific>
 The following user query failed to retrieve good results from our vector database.
 Your task is to rewrite it to improve semantic and keyword search performance. 
 Try using different synonyms, isolating core technical terms, or being more specific.
+{context_hint}
+</task_specific>
 
 <failed_query>
 {original_question}
-</failed_query>{context_hint}
-
-=== OUTPUT REQUIREMENTS ===
-Return ONLY the newly rewritten query string. Do not use quotes, JSON, or any conversational text."""
+</failed_query>"""
                 }],
                 temperature=0.3,
                 max_tokens=200,
@@ -372,9 +408,25 @@ Return ONLY the newly rewritten query string. Do not use quotes, JSON, or any co
                 model=self.model_name,
                 messages=[{
                     "role": "user",
-                    "content": f"""You are an aggressive and strict Fact Checker (Hallucination Detector).
+                    "content": f"""<persona>
+You are an aggressive and strict Fact Checker (Hallucination Detector).
+</persona>
+
+<constraints>
+1. FACTUALITY: The answer MUST NOT contain facts, claims, or data points that cannot be explicitly traced back to the documents.
+2. FORMATTING: You MUST return ONLY a valid JSON object.
+3. NO PREAMBLES: Directly return the JSON.
+</constraints>
+
+<task_specific>
 Your ONLY job is to verify if the provided answer is **100% grounded** (supported) by the provided Source Documents.
-The answer MUST NOT contain facts, claims, or data points that cannot be explicitly traced back to the documents.
+
+Expected JSON Format:
+{{
+    "is_grounded": true | false,
+    "reasoning": "<Point out specific unsupported claims if false, otherwise brief approval>"
+}}
+</task_specific>
 
 <source_documents>
 {doc_context}
@@ -382,16 +434,7 @@ The answer MUST NOT contain facts, claims, or data points that cannot be explici
 
 <answer_to_grade>
 {answer[:1000]}
-</answer_to_grade>
-
-=== OUTPUT REQUIREMENTS ===
-You MUST return ONLY a valid JSON object.
-
-Expected JSON Format:
-{{
-    "is_grounded": true | false,
-    "reasoning": "<Point out specific unsupported claims if false, otherwise brief approval>"
-}}"""
+</answer_to_grade>"""
                 }],
                 temperature=0.1,
                 max_tokens=150,
@@ -413,15 +456,22 @@ Expected JSON Format:
                 model=self.model_name,
                 messages=[{
                     "role": "user",
-                    "content": f"""You are a Chat Summarizer.
+                    "content": f"""<persona>
+You are a Chat Summarizer.
+</persona>
+
+<constraints>
+1. FORMATTING: Return ONLY the raw title string.
+2. NO PREAMBLES: Do not use quotation marks, markdown, or any conversational text.
+</constraints>
+
+<task_specific>
 Generate a very short, concise title (maximum 8 words) for a conversation that begins with the message below.
+</task_specific>
 
 <message>
 {first_message[:300]}
-</message>
-
-=== OUTPUT REQUIREMENTS ===
-Return ONLY the raw title string. Do not use quotation marks, markdown, or any conversational text."""
+</message>"""
                 }],
                 temperature=0.3,
                 max_tokens=30,
