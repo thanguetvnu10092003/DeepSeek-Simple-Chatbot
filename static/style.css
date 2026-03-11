@@ -1033,3 +1033,187 @@ html, body {
     border-radius: 8px;
     box-shadow: var(--shadow);
 }
+
+/* ===== Markdown & Syntax Highlighting ===== */
+.message-content h1, 
+.message-content h2, 
+.message-content h3 {
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+.message-content h1 { font-size: 1.5em; }
+.message-content h2 { font-size: 1.25em; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; margin-top: 1.5em; }
+.message-content h3 { font-size: 1.1em; }
+
+.message-content p {
+    margin-bottom: 0.75rem;
+}
+
+.message-content ul, 
+.message-content ol {
+    margin-left: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.message-content li {
+    margin-bottom: 0.25rem;
+}
+
+.message-content a {
+    color: var(--accent-light);
+    text-decoration: none;
+}
+.message-content a:hover {
+    text-decoration: underline;
+}
+
+.message-content blockquote {
+    border-left: 4px solid var(--accent);
+    padding-left: 1rem;
+    margin-left: 0;
+    margin-right: 0;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+}
+
+/* Inline code */
+.message-content code {
+    background: var(--bg-tertiary);
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+    font-size: 0.9em;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+/* Code blocks */
+.message-content pre {
+    background: #0d1117; /* GitHub Dark bg */
+    padding: 1rem;
+    border-radius: var(--radius-sm);
+    overflow-x: auto;
+    margin-bottom: 0.75rem;
+    border: 1px solid var(--border);
+}
+
+.message-content pre code {
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+    color: inherit;
+    font-size: 0.85em;
+}
+
+/* Tables */
+.message-content table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 1rem;
+}
+
+.message-content th,
+.message-content td {
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    text-align: left;
+}
+
+.message-content th {
+    background: var(--bg-tertiary);
+    font-weight: 600;
+}
+
+/* Copy button for Assistant Messages */
+.message.assistant {
+    position: relative;
+    padding-right: 40px; /* Make room for the copy button */
+}
+
+.btn-copy-msg {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-light);
+    color: var(--text-muted);
+    border-radius: var(--radius-xs);
+    padding: 6px;
+    cursor: pointer;
+    opacity: 0;
+    transition: all var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.message.assistant:hover .btn-copy-msg {
+    opacity: 1;
+}
+
+.btn-copy-msg:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+    border-color: var(--text-muted);
+}
+
+/* ===== Typing Indicator ===== */
+.typing-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 12px 16px;
+    width: fit-content;
+    height: 40px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+}
+
+.typing-indicator .dot {
+    width: 6px;
+    height: 6px;
+    background-color: var(--text-muted);
+    border-radius: 50%;
+    animation: typing 1.4s infinite ease-in-out both;
+}
+
+.typing-indicator .dot:nth-child(1) {
+    animation-delay: -0.32s;
+}
+
+.typing-indicator .dot:nth-child(2) {
+    animation-delay: -0.16s;
+}
+
+@keyframes typing {
+    0%, 80%, 100% {
+        transform: scale(0);
+        opacity: 0.3;
+    }
+    40% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* ===== Stop Generation Button ===== */
+.btn-stop {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition);
+}
+
+.btn-stop:hover {
+    color: var(--red);
+    background: rgba(239, 68, 68, 0.1);
+}

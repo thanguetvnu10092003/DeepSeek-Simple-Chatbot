@@ -7,6 +7,7 @@
     let currentConvId = null;
     let isProcessing = false;
     let selectedUploadFiles = [];
+    let currentAbortController = null;
 
     // ===== DOM Elements =====
     const $ = (sel) => document.querySelector(sel);
@@ -38,10 +39,23 @@
     const reasoningContent = $('#reasoning-content');
     const msgInput = $('#msg-input');
     const btnSend = $('#btn-send');
+    const btnStop = $('#btn-stop');
     const headerTitle = $('#header-title');
 
     // ===== Init =====
     async function init() {
+        // Configure Marked.js
+        if (window.marked && window.hljs) {
+            marked.setOptions({
+                highlight: function(code, lang) {
+                    const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+                    return hljs.highlight(code, { language }).value;
+                },
+                breaks: true,
+                gfm: true
+            });
+        }
+
         bindEvents();
         await loadConversations();
         await loadFiles();
@@ -73,7 +87,6 @@
         fileInput.addEventListener('change', () => handleFileSelect(fileInput.files));
         btnUpload.addEventListener('click', uploadFiles);
 
-        // Chat input
         msgInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -82,6 +95,14 @@
         });
         msgInput.addEventListener('input', autoResize);
         btnSend.addEventListener('click', sendMessage);
+        
+        // Stop generation
+        btnStop.addEventListener('click', () => {
+            if (currentAbortController) {
+                currentAbortController.abort();
+                stopGenerationUI();
+            }
+        });
 
         // Reasoning toggle
         reasoningToggle.addEventListener('click', () => {
@@ -273,13 +294,43 @@
         if (!animate) msgEl.style.animation = 'none';
 
         const avatarText = role === 'user' ? 'U' : 'AI';
-
-        msgEl.innerHTML = `
+        
+        // Build the inner HTML
+        let innerHtml = `
             <div class="message-avatar">${avatarText}</div>
             <div class="message-content">${formatContent(content)}</div>
         `;
+        
+        // Add Copy button for AI messages
+        if (role === 'assistant') {
+            innerHtml += `
+                <button class="btn-copy-msg" title="Copy message">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="copy-icon" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="check-icon" stroke="currentColor" stroke-width="2" style="display:none; color: var(--green);"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </button>
+            `;
+        }
 
+        msgEl.innerHTML = innerHtml;
         chatMessages.appendChild(msgEl);
+        
+        // Attach event listener for the copy button
+        if (role === 'assistant') {
+            const btnCopy = msgEl.querySelector('.btn-copy-msg');
+            btnCopy.addEventListener('click', () => {
+                navigator.clipboard.writeText(content).then(() => {
+                    const copyIcon = btnCopy.querySelector('.copy-icon');
+                    const checkIcon = btnCopy.querySelector('.check-icon');
+                    copyIcon.style.display = 'none';
+                    checkIcon.style.display = 'block';
+                    setTimeout(() => {
+                        copyIcon.style.display = 'block';
+                        checkIcon.style.display = 'none';
+                    }, 2000);
+                });
+            });
+        }
+        
         if (animate) scrollToBottom();
     }
 
@@ -333,7 +384,8 @@
         if (!message || isProcessing) return;
 
         isProcessing = true;
-        btnSend.disabled = true;
+        btnSend.style.display = 'none';
+        btnStop.style.display = 'flex';
         msgInput.value = '';
         msgInput.style.height = 'auto';
 
@@ -343,6 +395,8 @@
 
         // Get selected files from filter
         const selectedFiles = Array.from($$('.file-checkbox:checked')).map(cb => cb.value);
+        
+        currentAbortController = new AbortController();
 
         try {
             const response = await fetch('/api/chat', {
@@ -353,7 +407,8 @@
                     conversation_id: currentConvId,
                     selected_files: selectedFiles.length > 0 ? selectedFiles : null,
                     use_agentic: agenticToggle.checked
-                })
+                }),
+                signal: currentAbortController.signal
             });
 
             const reader = response.body.getReader();
@@ -393,13 +448,24 @@
             }
 
         } catch (e) {
-            console.error('Chat error:', e);
-            removeTypingIndicator();
-            appendMessage('assistant', `Connection error: ${e.message}`);
+            if (e.name === 'AbortError') {
+                console.log('Stream aborted natively');
+            } else {
+                console.error('Chat error:', e);
+                removeTypingIndicator();
+                appendMessage('assistant', `Connection error: ${e.message}`);
+            }
         }
 
+        stopGenerationUI();
+    }
+    
+    function stopGenerationUI() {
         isProcessing = false;
-        btnSend.disabled = false;
+        btnSend.style.display = 'flex';
+        btnStop.style.display = 'none';
+        currentAbortController = null;
+        removeTypingIndicator();
         msgInput.focus();
     }
 
@@ -624,19 +690,30 @@
     // ===== Helpers =====
     function formatContent(text) {
         if (!text) return '';
-        // Basic markdown-ish formatting
-        let html = escapeHtml(text);
-        // Bold
-        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-        // Italic
-        html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-        // Line breaks
-        html = html.replace(/\n/g, '<br>');
-        // Horizontal rules
-        html = html.replace(/---/g, '<hr style="border:none;border-top:1px solid var(--border-light);margin:8px 0;">');
-        // Bullet points
-        html = html.replace(/• /g, '<span style="color:var(--accent-light)">•</span> ');
-        return html;
+        
+        if (window.marked && window.DOMPurify) {
+            try {
+                // Parse markdown
+                const rawHtml = marked.parse(text);
+                // Sanitize HTML
+                return DOMPurify.sanitize(rawHtml, {
+                    ADD_ATTR: ['target'] // Allow attributes if necessary
+                });
+            } catch (e) {
+                console.error("Markdown parsing error:", e);
+                return escapeHtml(text);
+            }
+        } else {
+            // Fallback to basic if libraries are missing
+            console.warn("Marked or DOMPurify not loaded. Using basic formatting.");
+            let html = escapeHtml(text);
+            html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+            html = html.replace(/\n/g, '<br>');
+            html = html.replace(/---/g, '<hr style="border:none;border-top:1px solid var(--border-light);margin:8px 0;">');
+            html = html.replace(/• /g, '<span style="color:var(--accent-light)">•</span> ');
+            return html;
+        }
     }
 
     function escapeHtml(text) {
