@@ -3,10 +3,7 @@ title: PDF RAG DeepSeek OCR Chatbot
 emoji: 📄
 colorFrom: blue
 colorTo: purple
-sdk: gradio
-sdk_version: "5.9.1"
 python_version: "3.11"
-app_file: app.py
 pinned: false
 license: mit
 ---
@@ -22,7 +19,6 @@ license: mit
 </p>
 
 <p align="center">
-  <a href="https://huggingface.co/spaces/toanthangle/pdf-rag-deepseek-ocr-chatbot"><img src="https://img.shields.io/badge/🤗%20Live%20Demo-Hugging%20Face-FFD21E?style=for-the-badge" alt="Hugging Face"></a>
   <a href="https://console.groq.com/"><img src="https://img.shields.io/badge/Groq-LLM_API-F55036?style=for-the-badge&logo=groq&logoColor=white" alt="Groq"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-22C55E?style=for-the-badge" alt="License"></a>
 </p>
@@ -31,10 +27,6 @@ license: mit
 
 > 🤖 **An intelligent AI chatbot** that lets you **chat with your PDF documents & images**  
 > powered by **Agentic RAG** (LangGraph) — with multi-step reasoning, self-correction & hallucination checking.
-
-<br>
-
-### 🚀 [Try the Live Demo →](https://huggingface.co/spaces/toanthangle/pdf-rag-deepseek-ocr-chatbot)
 
 <br>
 
@@ -210,26 +202,13 @@ REPLICATE_API_TOKEN=your_replicate_token
 
 ### 3️⃣ Launch
 
-**Web UI (FastAPI — recommended):**
+**Web UI:**
 
 ```bash
 python server.py
 ```
 
 Open **http://localhost:8000** in your browser 🎉
-
-<details>
-<summary><b>Legacy: Gradio UI</b></summary>
-
-```bash
-python app.py
-```
-
-Open **http://127.0.0.1:7860** in your browser.
-
-> ⚠️ The Gradio UI is the original interface. The FastAPI web UI provides a more modern experience with chat history, file preview, and file deletion features.
-
-</details>
 
 <br>
 
@@ -262,7 +241,6 @@ Open **http://127.0.0.1:7860** in your browser.
 📦 DeepSeek-Simple-Chatbot
 │
 ├── 🌐 server.py             → FastAPI backend (REST API + SSE streaming)
-├── 🎯 app.py                → Legacy Gradio UI
 ├── 🤖 agentic_rag.py        → LangGraph workflow (6 agent nodes)
 ├── 🔍 rag.py                → Hybrid RAG engine + file deletion
 ├── 🧠 llm.py                → Groq LLM wrapper + 5 agentic methods
