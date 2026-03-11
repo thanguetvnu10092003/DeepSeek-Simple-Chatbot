@@ -1,8 +1,6 @@
 import os
 import logging
-from typing import List, Optional
-
-import gradio as gr
+from typing import List, Optional, Callable
 
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
@@ -110,11 +108,13 @@ class LangChainPDFRAG:
             self.bm25_retriever.k = 20
             logger.info(f"Updated BM25 index, total: {len(self.all_documents)} documents")
 
-    def add_pdf(self, pdf_path: str, enable_ocr: bool = True, progress=gr.Progress()):
+    def add_pdf(self, pdf_path: str, enable_ocr: bool = True, progress: Callable = None):
         """Add a PDF to the vectorstore"""
         logger.info(f"Adding PDF: {pdf_path}, OCR enabled: {enable_ocr}")
+        if progress is None:
+            progress = lambda *args, **kwargs: None
         
-        progress(0, desc="Đang đọc PDF...")
+        progress(0, desc="Reading PDF...")
         loader = OCRPDFLoader(pdf_path, enable_ocr=enable_ocr)
         docs, ocr_pages, skipped_pages = loader.load()
 
@@ -122,18 +122,18 @@ class LangChainPDFRAG:
             logger.warning(f"No documents extracted from {pdf_path}")
             return 0, 0, skipped_pages
 
-        progress(0.3, desc="Đang chia nhỏ văn bản (small chunks)...")
+        progress(0.3, desc="Splitting text (small chunks)...")
         splits_small = self.splitter_small.split_documents(docs)
         logger.info(f"Created {len(splits_small)} small chunks")
 
-        progress(0.5, desc="Đang chia nhỏ văn bản (large chunks)...")
+        progress(0.5, desc="Splitting text (large chunks)...")
         splits_large = self.splitter_large.split_documents(docs)
         logger.info(f"Created {len(splits_large)} large chunks")
 
-        progress(0.6, desc="Đang cập nhật BM25 index...")
+        progress(0.6, desc="Updating BM25 index...")
         self._update_bm25(splits_small)
 
-        progress(0.7, desc="Đang lưu vào database (small)...")
+        progress(0.7, desc="Saving to database (small)...")
         if self.vectorstore is None:
             self.vectorstore = Chroma.from_documents(
                 splits_small,
@@ -144,7 +144,7 @@ class LangChainPDFRAG:
         else:
             self.vectorstore.add_documents(splits_small)
 
-        progress(0.9, desc="Đang lưu vào database (large)...")
+        progress(0.9, desc="Saving to database (large)...")
         large_dir = self.persist_directory + "_large"
         if self.vectorstore_large is None:
             self.vectorstore_large = Chroma.from_documents(
@@ -156,7 +156,7 @@ class LangChainPDFRAG:
         else:
             self.vectorstore_large.add_documents(splits_large)
 
-        progress(1.0, desc="Hoàn thành!")
+        progress(1.0, desc="Complete!")
         logger.info(f"PDF added successfully: {len(splits_small)} chunks")
         return len(splits_small), ocr_pages, skipped_pages
 
@@ -292,27 +292,35 @@ class LangChainPDFRAG:
                 seen_contents.add(doc.page_content)
         
         if not all_docs:
-            return f"Không tìm thấy thông tin trong file **{target_file}**.", []
+            return f"No information found in file **{target_file}**.", []
         
         # Build context
         context_parts = []
         for doc in all_docs:
             page = doc.metadata.get('page', 'N/A')
-            context_parts.append(f"[Trang {page}]\n{doc.page_content}")
+            context_parts.append(f"[Page {page}]\n{doc.page_content}")
         
         context = "\n\n---\n\n".join(context_parts)
         
         # Single-file focused prompt
         prompt = ChatPromptTemplate.from_template(
-            f"Bạn là trợ lý thông minh. Trả lời dựa vào nội dung từ file **{target_file}**.\n\n"
-            "LƯU Ý:\n"
-            "- Chỉ sử dụng thông tin từ file này\n"
-            "- Trả lời chính xác, đầy đủ\n"
-            "- Trích dẫn trang nếu có\n"
-            "- Nếu không tìm thấy → nói rõ\n\n"
-            "Ngữ cảnh:\n{context}\n\n"
-            "Câu hỏi: {question}\n\n"
-            "Trả lời:"
+            "You are an elite document analysis AI assistant. Your primary goal is to provide accurate, "
+            "well-structured, and highly relevant answers based strictly on the provided context.\n\n"
+            "=== STRICT CONSTRAINTS ===\n"
+            "1. FACTUALITY: You MUST ONLY use the information included in the <context> tags.\n"
+            "2. NO HALLUCINATION: If the answer is not in the context, explicitly state: 'I cannot find the information in the provided documents.' DO NOT guess or make up facts.\n"
+            "3. CITATIONS: You MUST cite your sources using the exact format: `[Page X]`.\n"
+            "4. FORMATTING: Use Markdown. Use boldizing for key terms, bullet points for lists, and keep paragraphs concise.\n\n"
+            "=== TASK SPECIFIC ===\n"
+            f"You are analyzing a single specific file: **{target_file}**.\n"
+            "Focus entirely on this file's context. Ensure all citations accurately map to the provided page numbers.\n\n"
+            "=== CONTEXT DATA ===\n"
+            "Read the following context carefully:\n"
+            "<context>\n{context}\n</context>\n\n"
+            "=== USER QUERY ===\n"
+            "Based on the context above, answer the query:\n"
+            "<user_query>\n{question}\n</user_query>\n\n"
+            "Answer:"
         )
         
         chain = (
@@ -324,7 +332,7 @@ class LangChainPDFRAG:
             answer = chain.invoke(question)
         except Exception as e:
             logger.error(f"Error in chain: {e}")
-            return f"Lỗi khi xử lý: {str(e)}", []
+            return f"Error processing query: {str(e)}", []
         
         strategy_info = f"\n\n*File: {target_file} | Chunks: {len(all_docs)}*"
         return answer + strategy_info, all_docs
@@ -379,30 +387,37 @@ class LangChainPDFRAG:
                 logger.warning(f"Error searching file {filename}: {e}")
         
         if not all_docs:
-            return f"Không tìm thấy thông tin trong các file đã chọn.", []
+            return f"No information found in the selected files.", []
         
         # Build context
         context_parts = []
         for doc in all_docs:
             filename = doc.metadata.get('filename', 'Unknown')
             page = doc.metadata.get('page', 'N/A')
-            context_parts.append(f"[File: {filename} - Trang {page}]\n{doc.page_content}")
+            context_parts.append(f"[File: {filename} - Page {page}]\n{doc.page_content}")
         
         context = "\n\n---\n\n".join(context_parts)
         
         # Multi-file focused prompt
         file_list_str = ", ".join(target_files)
         prompt = ChatPromptTemplate.from_template(
-            f"Bạn là trợ lý thông minh. Trả lời dựa vào nội dung từ các file: **{file_list_str}**.\n\n"
-            "LƯU Ý:\n"
-            "- Chỉ sử dụng thông tin từ các file đã chọn\n"
-            "- Trả lời chính xác, đầy đủ\n"
-            "- Trích dẫn file và trang nếu có\n"
-            "- So sánh thông tin giữa các file nếu phù hợp\n"
-            "- Nếu không tìm thấy → nói rõ\n\n"
-            "Ngữ cảnh:\n{context}\n\n"
-            "Câu hỏi: {question}\n\n"
-            "Trả lời:"
+            "You are an elite document analysis AI assistant. Your primary goal is to provide accurate, "
+            "well-structured, and highly relevant answers based strictly on the provided context.\n\n"
+            "=== STRICT CONSTRAINTS ===\n"
+            "1. FACTUALITY: You MUST ONLY use the information included in the <context> tags.\n"
+            "2. NO HALLUCINATION: If the answer is not in the context, explicitly state: 'I cannot find the information in the provided documents.' DO NOT guess or make up facts.\n"
+            "3. CITATIONS: You MUST cite your sources using the exact format: `[File: name - Page X]`.\n"
+            "4. FORMATTING: Use Markdown. Use boldizing for key terms, bullet points for lists, and keep paragraphs concise.\n\n"
+            "=== TASK SPECIFIC ===\n"
+            f"You are analyzing multiple files: **{file_list_str}**.\n"
+            "Synthesize information across these files. When contrasting or combining data, explicitly mention which file the information came from to avoid confusion.\n\n"
+            "=== CONTEXT DATA ===\n"
+            "Read the following context carefully:\n"
+            "<context>\n{context}\n</context>\n\n"
+            "=== USER QUERY ===\n"
+            "Based on the context above, answer the query:\n"
+            "<user_query>\n{question}\n</user_query>\n\n"
+            "Answer:"
         )
         
         chain = (
@@ -414,7 +429,7 @@ class LangChainPDFRAG:
             answer = chain.invoke(question)
         except Exception as e:
             logger.error(f"Error in chain: {e}")
-            return f"Lỗi khi xử lý: {str(e)}", []
+            return f"Error processing query: {str(e)}", []
         
         strategy_info = f"\n\n*Files: {len(target_files)} | Chunks: {len(all_docs)}*"
         return answer + strategy_info, all_docs
@@ -478,7 +493,7 @@ class LangChainPDFRAG:
             target_files: Optional list of filenames - if specified, ONLY search in these files
         """
         if not self.vectorstore:
-            return "Chưa có tài liệu nào được thêm vào!", []
+            return "No documents have been added yet!", []
 
         logger.info(f"Processing query: {question[:100]}...")
         
@@ -498,17 +513,17 @@ class LangChainPDFRAG:
         mentioned_files = self._detect_mentioned_files(question, all_files)
         logger.info(f"Mentioned files: {mentioned_files}")
 
-        # Phân loại câu hỏi bằng LLM
+        # Classify query using LLM
         query_info = self.llm.classify_query(question)
         logger.info(f"Query classification: {query_info}")
 
-        # Quyết định strategy dựa trên phân loại
+        # Determine strategy based on classification
         query_type = query_info.get("type", "question")
         complexity = query_info.get("complexity", "medium")
         needs_detail = query_info.get("needs_detail", True)
         needs_all_files = query_info.get("needs_all_files", False)
 
-        # Chọn vectorstore và parameters phù hợp
+        # Select vectorstore and parameters
         if query_type == "exercise" or needs_detail:
             active_vectorstore = self.vectorstore_large if self.vectorstore_large else self.vectorstore
             k_value = 40
@@ -619,49 +634,56 @@ class LangChainPDFRAG:
             filename = doc.metadata.get('filename', 'Unknown')
             page = doc.metadata.get('page', 'N/A')
             context_parts.append(
-                f"[File: {filename} - Trang {page}]\n{doc.page_content}"
+                f"[File: {filename} - Page {page}]\n{doc.page_content}"
             )
 
         context = "\n\n---\n\n".join(context_parts)
 
-        # Chọn prompt phù hợp với loại câu hỏi
+        # Select prompt based on query type
+        base_persona = (
+            "You are an elite document analysis AI assistant. Your primary goal is to provide accurate, "
+            "well-structured, and highly relevant answers based strictly on the provided context.\n\n"
+            "=== STRICT CONSTRAINTS ===\n"
+            "1. FACTUALITY: You MUST ONLY use the information included in the <context> tags.\n"
+            "2. NO HALLUCINATION: If the answer is not in the context, explicitly state: 'I cannot find the information in the provided documents.' DO NOT guess or make up facts.\n"
+            "3. CITATIONS: You MUST cite your sources using the exact format: `[File: name - Page X]`.\n"
+            "4. FORMATTING: Use Markdown."
+        )
+
+        data_wrapper = (
+            "=== CONTEXT DATA ===\n"
+            "<context>\n{context}\n</context>\n\n"
+            "=== USER QUERY ===\n"
+            "<user_query>\n{question}\n</user_query>\n\n"
+            "Answer:"
+        )
+
         if query_type == "exercise":
-            prompt = ChatPromptTemplate.from_template(
-                "Bạn là giáo viên giỏi giải bài tập. Đọc KỸ TOÀN BỘ ngữ cảnh và trả lời CHI TIẾT.\n\n"
-                "QUY TẮC:\n"
-                "- Đọc TOÀN BỘ đề bài, không bỏ sót yêu cầu\n"
-                "- Giải TỪNG CÂU/PHẦN một cách chi tiết\n"
-                "- Nếu có bảng/danh sách → điền ĐẦY ĐỦ\n"
-                "- Trích dẫn đề bài trước khi giải\n"
-                "- Giải thích logic/lý do\n"
-                "- Format rõ ràng, dễ đọc\n\n"
-                "Ngữ cảnh:\n{context}\n\n"
-                "Câu hỏi: {question}\n\n"
-                "Trả lời chi tiết:"
+            task_specific = (
+                "=== TASK SPECIFIC ===\n"
+                "You are acting as an expert tutor guiding a student through an exercise or test problem.\n"
+                "- Step 1: Quote the original question/exercise clearly.\n"
+                "- Step 2: Solve the problem step-by-step, explaining the underlying logic and reasoning.\n"
+                "- Step 3: If there's a table or list to be filled out, fill it completely based on the context.\n"
             )
+            prompt = ChatPromptTemplate.from_template(f"{base_persona}\n\n{task_specific}\n\n{data_wrapper}")
         elif query_type == "overview":
-            prompt = ChatPromptTemplate.from_template(
-                "Bạn là trợ lý thông minh, chuyên tổng hợp thông tin.\n\n"
-                "Hiện có {num_files} file: {file_list}\n\n"
-                "YÊU CẦU:\n"
-                "- Tóm tắt nội dung chính của TỪNG file\n"
-                "- So sánh/liên hệ nếu có\n"
-                "- Trình bày rõ ràng, có cấu trúc\n\n"
-                "Ngữ cảnh:\n{context}\n\n"
-                "Câu hỏi: {question}\n\n"
-                "Trả lời:"
+            task_specific = (
+                "=== TASK SPECIFIC ===\n"
+                "You have been asked to provide an overview or summary.\n"
+                "- There are {num_files} files: {file_list}\n"
+                "- Extract the main themes or core arguments from EACH file provided in the context.\n"
+                "- Compare, contrast, and relate the information between different files if applicable.\n"
+                "- Present the final output using clear structured sections (e.g., using Level 2/3 Markdown Headers).\n"
             )
+            prompt = ChatPromptTemplate.from_template(f"{base_persona}\n\n{task_specific}\n\n{data_wrapper}")
         else:
-            prompt = ChatPromptTemplate.from_template(
-                "Bạn là trợ lý thông minh. Trả lời dựa vào ngữ cảnh.\n\n"
-                "LƯU Ý:\n"
-                "- Trả lời chính xác, đầy đủ\n"
-                "- Trích dẫn nguồn (file, trang)\n"
-                "- Nếu không tìm thấy → nói rõ\n\n"
-                "Ngữ cảnh:\n{context}\n\n"
-                "Câu hỏi: {question}\n\n"
-                "Trả lời:"
+            task_specific = (
+                "=== TASK SPECIFIC ===\n"
+                "This is a standard informational query.\n"
+                "Provide a direct, comprehensive, and clear answer. Avoid unnecessary fluff and get straight to the point.\n"
             )
+            prompt = ChatPromptTemplate.from_template(f"{base_persona}\n\n{task_specific}\n\n{data_wrapper}")
 
         # Build chain
         if query_type == "overview":
@@ -684,7 +706,7 @@ class LangChainPDFRAG:
             answer = chain.invoke(question)
         except Exception as e:
             logger.error(f"Error in query chain: {e}")
-            return f"Lỗi khi xử lý câu hỏi: {str(e)}", []
+            return f"Error processing query: {str(e)}", []
 
         mentioned_files_in_answer = set()
         for doc in balanced_docs:
@@ -703,7 +725,7 @@ class LangChainPDFRAG:
 
         final_sources = priority_docs + other_docs
 
-        # Thêm thông tin về strategy đã dùng
+        # Append strategy info
         strategy_info = f"\n\n*Strategy: {query_type} | Hybrid Search | Chunks: {len(balanced_docs)}*"
 
         logger.info(f"Query completed: strategy={query_type}, chunks={len(balanced_docs)}")
@@ -715,7 +737,7 @@ class LangChainPDFRAG:
         Returns (answer, sources, reasoning_steps)
         """
         if not self.vectorstore:
-            return "Chưa có tài liệu nào được thêm vào!", [], []
+            return "No documents have been added yet!", [], []
 
         logger.info(f"[Agentic] Processing query: {question[:100]}...")
         return run_agentic_query(

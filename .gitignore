@@ -49,6 +49,7 @@ temp_ocr/
 # IDE
 .idea/
 .vscode/
+.gradio/
 *.swp
 *.swo
 *~

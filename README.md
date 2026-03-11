@@ -56,6 +56,7 @@ license: mit
 
 ### 🤖 Agentic RAG Mode
 - **Smart query routing** — auto-classifies simple vs complex
+- **Advanced Prompt Engineering** — strict constraints & XML data wrappers
 - **Query decomposition** — breaks down multi-part questions
 - **Document grading** — filters irrelevant retrieval results
 - **Self-correction** — rewrites queries & retries (max 2x)

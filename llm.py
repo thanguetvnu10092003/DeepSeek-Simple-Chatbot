@@ -107,7 +107,7 @@ class GroqLLM(LLM):
         return json.loads(result)
 
     def classify_query(self, question: str) -> dict:
-        """Phân loại câu hỏi bằng LLM để quyết định strategy"""
+        """Classify query using LLM to determine strategy"""
         # Check cache first
         cached = self._classification_cache.get(question)
         if cached:
@@ -118,28 +118,33 @@ class GroqLLM(LLM):
                 model=self.model_name,
                 messages=[{
                     "role": "user",
-                    "content": f"""Phân tích câu hỏi sau và trả lời ĐÚNG định dạng JSON:
+                    "content": f"""You are an elite NLP Query Classifier.
+Analyze the following user question and determine its type, complexity, and requirements.
 
-Câu hỏi: "{question}"
+<user_query>
+{question}
+</user_query>
 
-Trả về JSON với các trường:
+=== OUTPUT REQUIREMENTS ===
+You MUST return ONLY a valid JSON object. Do not include markdown codeblocks or any additional explanations.
+
+JSON EXPLANATION:
+- "type": 
+  * "overview": summarize/list across multiple files
+  * "specific": asking about specific content in 1 file/topic
+  * "exercise": solving exercises, needs full problem statement
+  * "question": general question
+- "needs_all_files": boolean, does it need information from ALL files?
+- "complexity": "low", "medium", or "high"
+- "needs_detail": boolean, needs a detailed or summary answer?
+
+Example valid JSON output:
 {{
-    "type": "overview" | "specific" | "exercise" | "question",
-    "needs_all_files": true/false,
-    "complexity": "low" | "medium" | "high",
-    "needs_detail": true/false
-}}
-
-Giải thích:
-- type: 
-  * "overview": tóm tắt/liệt kê nhiều file
-  * "specific": hỏi về nội dung cụ thể 1 file/topic
-  * "exercise": giải bài tập, cần đề bài đầy đủ
-  * "question": câu hỏi thông thường
-- needs_all_files: có cần thông tin từ TẤT CẢ file không?
-- complexity: độ phức tạp câu hỏi
-- needs_detail: cần câu trả lời chi tiết hay tóm tắt?
-"""             }],
+    "type": "specific",
+    "needs_all_files": false,
+    "complexity": "medium",
+    "needs_detail": true
+}}"""             }],
                 temperature=0.1,
                 max_tokens=150,
             )
@@ -181,20 +186,27 @@ Giải thích:
                 model=self.model_name,
                 messages=[{
                     "role": "user",
-                    "content": f"""Analyze this question and determine if it's SIMPLE or COMPLEX.
+                    "content": f"""You are a smart Query Router.
+Determine if the given query is SIMPLE or COMPLEX.
 
-Question: "{question}"
+<user_query>
+{question}
+</user_query>
 
+=== DEFINITIONS ===
 A question is COMPLEX if it:
-- Requires comparing information from multiple sources
-- Has multiple sub-questions or parts
-- Needs multi-step reasoning
-- Asks for analysis/synthesis across topics
+- Requires comparing information from multiple sources.
+- Has multiple sub-questions or parts.
+- Needs multi-step reasoning.
+- Asks for analysis/synthesis across topics.
 
-Return JSON:
+=== OUTPUT REQUIREMENTS ===
+You MUST return ONLY a valid JSON object. Do not explain your answer outside the JSON payload.
+
+Expected JSON Format:
 {{
-    "type": "simple" or "complex",
-    "reasoning": "brief explanation"
+    "type": "simple" | "complex",
+    "reasoning": "<brief explanation of why it is simple or complex>"
 }}"""
                 }],
                 temperature=0.1,
@@ -215,14 +227,19 @@ Return JSON:
                 model=self.model_name,
                 messages=[{
                     "role": "user",
-                    "content": f"""Break down this complex question into 2-4 simpler sub-questions.
-Each sub-question should be answerable independently.
+                    "content": f"""You are an expert Query Decomposer.
+Your task is to break down a complex question into 2 to 4 simpler, independent sub-questions that can be answered sequentially.
 
-Original question: "{question}"
+<original_question>
+{question}
+</original_question>
 
-Return JSON:
+=== OUTPUT REQUIREMENTS ===
+You MUST return ONLY a valid JSON object without markdown formatting.
+
+Expected JSON Format:
 {{
-    "sub_questions": ["question1", "question2", ...]
+    "sub_questions": ["<sub_question_1>", "<sub_question_2>"]
 }}"""
                 }],
                 temperature=0.2,
@@ -264,17 +281,24 @@ Return JSON:
                     model=self.model_name,
                     messages=[{
                         "role": "user",
-                        "content": f"""Grade each document's relevance to the question.
+                        "content": f"""You are a strict Document Relevance Grader.
+Determine if each document contains information relevant to answering the question.
 
-Question: "{question}"
+<user_query>
+{question}
+</user_query>
 
-Documents:
+<documents_to_grade>
 {docs_text}
+</documents_to_grade>
 
-For each document, determine if it contains information relevant to answering the question.
-Return JSON:
+=== OUTPUT REQUIREMENTS ===
+You MUST return ONLY a valid JSON object.
+Provide an array of booleans mapping 1-to-1 to the provided documents (true = relevant, false = irrelevant).
+
+Expected JSON Format:
 {{
-    "grades": [true, false, true, ...] // one boolean per document
+    "grades": [true, false, true]
 }}"""
                     }],
                     temperature=0.1,
@@ -307,12 +331,17 @@ Return JSON:
                 model=self.model_name,
                 messages=[{
                     "role": "user",
-                    "content": f"""The following question did not retrieve good results from a document search.
-Rewrite it to improve search results. Use different keywords, be more specific, or try alternative phrasing.
+                    "content": f"""You are an advanced Search Query Reformulator.
+The following user query failed to retrieve good results from our vector database.
+Your task is to rewrite it to improve semantic and keyword search performance. 
+Try using different synonyms, isolating core technical terms, or being more specific.
 
-Original question: "{original_question}"{context_hint}
+<failed_query>
+{original_question}
+</failed_query>{context_hint}
 
-Return ONLY the rewritten question, nothing else."""
+=== OUTPUT REQUIREMENTS ===
+Return ONLY the newly rewritten query string. Do not use quotes, JSON, or any conversational text."""
                 }],
                 temperature=0.3,
                 max_tokens=200,
@@ -343,19 +372,25 @@ Return ONLY the rewritten question, nothing else."""
                 model=self.model_name,
                 messages=[{
                     "role": "user",
-                    "content": f"""Determine if the answer is grounded in (supported by) the source documents.
-The answer should not contain claims that are not supported by the documents.
+                    "content": f"""You are an aggressive and strict Fact Checker (Hallucination Detector).
+Your ONLY job is to verify if the provided answer is **100% grounded** (supported) by the provided Source Documents.
+The answer MUST NOT contain facts, claims, or data points that cannot be explicitly traced back to the documents.
 
-Source Documents:
+<source_documents>
 {doc_context}
+</source_documents>
 
-Answer to check:
+<answer_to_grade>
 {answer[:1000]}
+</answer_to_grade>
 
-Return JSON:
+=== OUTPUT REQUIREMENTS ===
+You MUST return ONLY a valid JSON object.
+
+Expected JSON Format:
 {{
-    "is_grounded": true/false,
-    "reasoning": "brief explanation"
+    "is_grounded": true | false,
+    "reasoning": "<Point out specific unsupported claims if false, otherwise brief approval>"
 }}"""
                 }],
                 temperature=0.1,
@@ -378,12 +413,15 @@ Return JSON:
                 model=self.model_name,
                 messages=[{
                     "role": "user",
-                    "content": f"""Tạo tiêu đề ngắn gọn (tối đa 8 từ) cho cuộc trò chuyện bắt đầu bằng tin nhắn sau.
-Chỉ trả về tiêu đề, không giải thích, không dấu ngoặc kép.
+                    "content": f"""You are a Chat Summarizer.
+Generate a very short, concise title (maximum 8 words) for a conversation that begins with the message below.
 
-Tin nhắn: "{first_message[:300]}"
+<message>
+{first_message[:300]}
+</message>
 
-Tiêu đề:"""
+=== OUTPUT REQUIREMENTS ===
+Return ONLY the raw title string. Do not use quotation marks, markdown, or any conversational text."""
                 }],
                 temperature=0.3,
                 max_tokens=30,

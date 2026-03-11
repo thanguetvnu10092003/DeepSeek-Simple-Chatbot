@@ -243,7 +243,7 @@ def generate(state: AgentState, llm, rag_system) -> AgentState:
     target_files = state.get("target_files")
 
     if not documents:
-        state["generation"] = "Không tìm thấy thông tin phù hợp trong tài liệu."
+        state["generation"] = "No relevant information found in the documents."
         state["reasoning_steps"].append("[Generator] No relevant documents - returning empty result")
         return state
 
@@ -254,7 +254,7 @@ def generate(state: AgentState, llm, rag_system) -> AgentState:
     for doc in documents:
         filename = doc.metadata.get("filename", "Unknown")
         page = doc.metadata.get("page", "N/A")
-        context_parts.append(f"[File: {filename} - Trang {page}]\n{doc.page_content}")
+        context_parts.append(f"[File: {filename} - Page {page}]\n{doc.page_content}")
 
     context = "\n\n---\n\n".join(context_parts)
 
@@ -262,41 +262,76 @@ def generate(state: AgentState, llm, rag_system) -> AgentState:
     query_info = llm.classify_query(question)
     query_type = query_info.get("type", "question")
 
+    # 1. Base Persona & Global Constraints
+    base_persona = (
+        "You are an elite document analysis AI assistant. Your primary goal is to provide accurate, "
+        "well-structured, and highly relevant answers based strictly on the provided context."
+    )
+    
+    global_constraints = (
+        "=== STRICT CONSTRAINTS ===\n"
+        "1. FACTUALITY: You MUST ONLY use the information included in the <context> tags.\n"
+        "2. NO HALLUCINATION: If the answer is not in the context, explicitly state: 'I cannot find the information in the provided documents.' DO NOT guess or make up facts.\n"
+        "3. CITATIONS: You MUST cite your sources using the exact format: `[File: name - Page X]`. Example: According to the report [File: report.pdf - Page 3]...\n"
+        "4. FORMATTING: Use Markdown. Use boldizing for key terms, bullet points for lists, and keep paragraphs concise."
+    )
+
+    # 2. Task-Specific Instructions
     if target_files and len(target_files) == 1:
-        system_msg = (
-            f"Bạn là trợ lý thông minh. Trả lời dựa vào nội dung từ file **{target_files[0]}**.\n"
-            "Chỉ sử dụng thông tin từ file này. Trích dẫn trang nếu có."
+        task_specific = (
+            f"=== TASK SPECIFIC ===\n"
+            f"You are analyzing a single specific file: **{target_files[0]}**.\n"
+            "Focus entirely on this file's context. Ensure all citations point to pages within this file."
         )
     elif target_files and len(target_files) > 1:
         file_list_str = ", ".join(target_files)
-        system_msg = (
-            f"Bạn là trợ lý thông minh. Trả lời dựa vào nội dung từ các file: **{file_list_str}**.\n"
-            "So sánh thông tin giữa các file nếu phù hợp. Trích dẫn file và trang."
+        task_specific = (
+            f"=== TASK SPECIFIC ===\n"
+            f"You are analyzing multiple files: **{file_list_str}**.\n"
+            "Synthesize information across these files. When contrasting or combining data, explicitly mention which file the information came from to avoid confusion."
         )
     elif query_type == "exercise":
-        system_msg = (
-            "Bạn là giáo viên giỏi giải bài tập. Đọc KỸ TOÀN BỘ ngữ cảnh.\n"
-            "Giải TỪNG CÂU/PHẦN một cách chi tiết. Trích dẫn đề bài trước khi giải."
+        task_specific = (
+            "=== TASK SPECIFIC ===\n"
+            "You are acting as an expert tutor guiding a student through an exercise or test problem.\n"
+            "- Step 1: Quote the original question/exercise clearly.\n"
+            "- Step 2: Solve the problem step-by-step, explaining the underlying logic and reasoning.\n"
+            "- Step 3: If there's a table or list to be filled out, fill it completely based on the context."
         )
     elif query_type == "overview":
-        system_msg = (
-            "Bạn là trợ lý thông minh, chuyên tổng hợp thông tin.\n"
-            "Tóm tắt nội dung chính của TỪNG file. So sánh/liên hệ nếu có."
+        task_specific = (
+            "=== TASK SPECIFIC ===\n"
+            "You have been asked to provide an overview or summary.\n"
+            "- Extract the main themes or core arguments from EACH file provided in the context.\n"
+            "- Compare, contrast, and relate the information between different files if applicable.\n"
+            "- Present the final output using clear structured sections (e.g., using Level 2/3 Markdown Headers)."
         )
     else:
-        system_msg = (
-            "Bạn là trợ lý thông minh. Trả lời dựa vào ngữ cảnh.\n"
-            "Trả lời chính xác, đầy đủ. Trích dẫn nguồn (file, trang). "
-            "Nếu không tìm thấy → nói rõ."
+        task_specific = (
+            "=== TASK SPECIFIC ===\n"
+            "This is a standard informational query.\n"
+            "Provide a direct, comprehensive, and clear answer. Avoid unnecessary fluff and get straight to the point."
         )
 
-    prompt_text = f"{system_msg}\n\nNgữ cảnh:\n{context}\n\nCâu hỏi: {question}\n\nTrả lời:"
+    # 3. Final Prompt Assembly with XML tags
+    prompt_text = (
+        f"{base_persona}\n\n"
+        f"{global_constraints}\n\n"
+        f"{task_specific}\n\n"
+        f"=== CONTEXT DATA ===\n"
+        f"Read the following context carefully:\n"
+        f"<context>\n{context}\n</context>\n\n"
+        f"=== USER QUERY ===\n"
+        f"Based on the context above, answer the query:\n"
+        f"<user_query>\n{question}\n</user_query>\n\n"
+        f"Answer:"
+    )
 
     try:
         answer = llm._call(prompt_text)
     except Exception as e:
         logger.error(f"[Generator] Error: {e}")
-        answer = f"Lỗi khi xử lý: {str(e)}"
+        answer = f"Error processing query: {str(e)}"
 
     state["generation"] = answer
     state["reasoning_steps"].append(
