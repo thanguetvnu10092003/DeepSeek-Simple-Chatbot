@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./chroma_db:/app/chroma_db
+      - ./chat_history:/app/chat_history
+      - ./uploads:/app/uploads
+    env_file:
+      - .env
+    restart: always
+    environment:
+      - HOST=0.0.0.0
