@@ -1,13 +1,3 @@
----
-title: PDF RAG DeepSeek OCR Chatbot
-emoji: 📄
-colorFrom: blue
-colorTo: purple
-python_version: "3.11"
-pinned: false
-license: mit
----
-
 <div align="center">
 
 # 📚 PDF RAG Chatbot with DeepSeek OCR
