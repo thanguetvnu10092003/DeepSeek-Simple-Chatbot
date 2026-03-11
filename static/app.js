@@ -41,6 +41,10 @@
     const btnSend = $('#btn-send');
     const btnStop = $('#btn-stop');
     const headerTitle = $('#header-title');
+    const btnThemeToggle = $('#btn-theme-toggle');
+    const iconSun = btnThemeToggle ? btnThemeToggle.querySelector('.icon-sun') : null;
+    const iconMoon = btnThemeToggle ? btnThemeToggle.querySelector('.icon-moon') : null;
+    const hljsTheme = $('#hljs-theme');
 
     // ===== Init =====
     async function init() {
@@ -56,9 +60,27 @@
             });
         }
 
+        // Load theme
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        setTheme(savedTheme);
+
         bindEvents();
         await loadConversations();
         await loadFiles();
+    }
+
+    function setTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+        if (theme === 'light') {
+            if (iconSun) iconSun.style.display = 'none';
+            if (iconMoon) iconMoon.style.display = 'block';
+            if (hljsTheme) hljsTheme.href = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css";
+        } else {
+            if (iconSun) iconSun.style.display = 'block';
+            if (iconMoon) iconMoon.style.display = 'none';
+            if (hljsTheme) hljsTheme.href = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css";
+        }
     }
 
     function bindEvents() {
@@ -66,6 +88,14 @@
         btnToggleSidebar.addEventListener('click', () => {
             sidebar.classList.toggle('collapsed');
         });
+
+        // Theme toggle
+        if (btnThemeToggle) {
+            btnThemeToggle.addEventListener('click', () => {
+                const currentTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+                setTheme(currentTheme === 'light' ? 'dark' : 'light');
+            });
+        }
 
         // New chat
         btnNewChat.addEventListener('click', newConversation);

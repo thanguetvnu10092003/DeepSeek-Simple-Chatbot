@@ -31,6 +31,25 @@
     --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
+[data-theme="light"] {
+    --bg-primary: #f8fafc;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f1f5f9;
+    --bg-hover: #e2e8f0;
+    --bg-active: #cbd5e1;
+    --text-primary: #0f172a;
+    --text-secondary: #334155;
+    --text-muted: #64748b;
+    --accent: #4f46e5;
+    --accent-light: #6366f1;
+    --accent-glow: rgba(79, 70, 229, 0.15);
+    --green: #059669;
+    --red: #dc2626;
+    --orange: #d97706;
+    --border: #e2e8f0;
+    --border-light: #cbd5e1;
+}
+
 html, body {
     height: 100%;
     font-family: var(--font);
@@ -381,6 +400,27 @@ html, body {
     display: flex;
     align-items: center;
     gap: 16px;
+}
+
+.btn-theme-toggle {
+    background: transparent;
+    border: 1px solid var(--border-light);
+    color: var(--text-muted);
+    border-radius: var(--radius-xs);
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all var(--transition);
+    flex-shrink: 0;
+}
+
+.btn-theme-toggle:hover {
+    color: var(--text-primary);
+    border-color: var(--accent);
+    background: var(--accent-glow);
 }
 
 .header-controls select {
@@ -1100,7 +1140,7 @@ html, body {
 
 /* Code blocks */
 .message-content pre {
-    background: #0d1117; /* GitHub Dark bg */
+    background: var(--bg-primary); /* Use primary bg instead of hardcoded dark for light mode logic */
     padding: 1rem;
     border-radius: var(--radius-sm);
     overflow-x: auto;
