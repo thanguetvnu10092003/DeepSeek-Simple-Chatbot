@@ -20,6 +20,12 @@
 
 <br>
 
+<p align="center">
+  <img src="assets/ui-preview.png" alt="PDF RAG Chatbot UI Preview" width="850">
+</p>
+
+<br>
+
 [Features](#-key-features) · [Architecture](#-agentic-rag-architecture) · [Quick Start](#-quick-start) · [Usage](#-usage) · [Pricing](#-pricing)
 
 </div>
