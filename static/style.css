@@ -531,7 +531,10 @@ html, body {
     font-size: 14px;
     line-height: 1.7;
     word-wrap: break-word;
-    white-space: pre-wrap;
+}
+
+.message-content > *:last-child {
+    margin-bottom: 0;
 }
 
 .message.user .message-content {
@@ -639,7 +642,7 @@ html, body {
 
 /* ===== Input Area ===== */
 .chat-input-area {
-    padding: 12px 20px 16px;
+    padding: 8px 20px 16px;
     border-top: 1px solid var(--border);
     background: var(--bg-secondary);
     flex-shrink: 0;
