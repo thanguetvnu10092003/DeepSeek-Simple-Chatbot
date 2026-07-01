@@ -50,43 +50,42 @@ class VisionRAG:
         page_dir = os.path.join(self.pages_dir, filename)
         os.makedirs(page_dir, exist_ok=True)
 
-        doc = fitz.open(pdf_path)
         indexed, skipped = 0, 0
-        total = len(doc)
 
-        progress(0, desc="Rendering pages...")
+        with fitz.open(pdf_path) as doc:
+            total = len(doc)
+            progress(0, desc="Rendering pages...")
 
-        for i, page in enumerate(doc):
-            progress(i / total, desc=f"Indexing page {i + 1}/{total}...")
-            try:
-                pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5))
-                img_path = os.path.join(page_dir, f"page_{i + 1}.png")
-                pix.save(img_path)
+            for i, page in enumerate(doc):
+                progress(i / total, desc=f"Indexing page {i + 1}/{total}...")
+                try:
+                    pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5))
+                    img_path = os.path.join(page_dir, f"page_{i + 1}.png")
+                    pix.save(img_path)
 
-                img = Image.open(img_path).convert('RGB')
-                if img.width > 1024:
-                    ratio = 1024 / img.width
-                    img = img.resize((1024, int(img.height * ratio)), Image.LANCZOS)
-                    img.save(img_path)
+                    img = Image.open(img_path).convert('RGB')
+                    if img.width > 1024:
+                        ratio = 1024 / img.width
+                        img = img.resize((1024, int(img.height * ratio)), Image.LANCZOS)
+                        img.save(img_path)
 
-                embedding = self.clip.encode(img).tolist()
+                    embedding = self.clip.encode(img).tolist()
 
-                self._collection.upsert(
-                    ids=[f"{filename}_page_{i + 1}"],
-                    embeddings=[embedding],
-                    metadatas=[{
-                        "filename": filename,
-                        "page": i + 1,
-                        "image_path": img_path,
-                    }],
-                    documents=[f"{filename} page {i + 1}"],
-                )
-                indexed += 1
-            except Exception as e:
-                logger.warning(f"Skipped page {i + 1} of {filename}: {e}")
-                skipped += 1
+                    self._collection.upsert(
+                        ids=[f"{filename}_page_{i + 1}"],
+                        embeddings=[embedding],
+                        metadatas=[{
+                            "filename": filename,
+                            "page": i + 1,
+                            "image_path": img_path,
+                        }],
+                        documents=[f"{filename} page {i + 1}"],
+                    )
+                    indexed += 1
+                except Exception as e:
+                    logger.warning(f"Skipped page {i + 1} of {filename}: {e}")
+                    skipped += 1
 
-        doc.close()
         progress(1.0, desc="Complete!")
         logger.info(f"VisionRAG indexed {indexed} pages, skipped {skipped} from {filename}")
         return indexed, skipped
@@ -140,9 +139,18 @@ class VisionRAG:
         elif target_files and len(target_files) > 1:
             where_filter = {"filename": {"$in": target_files}}
 
+        if where_filter:
+            filtered_count = len(self._collection.get(where=where_filter, include=[])["ids"])
+            n = min(TOP_K, filtered_count)
+        else:
+            n = min(TOP_K, self._collection.count())
+
+        if n == 0:
+            return "No relevant pages found.", []
+
         query_kwargs = dict(
             query_embeddings=[text_embedding],
-            n_results=min(TOP_K, self._collection.count()),
+            n_results=n,
             include=["metadatas", "distances"],
         )
         if where_filter:

@@ -96,13 +96,14 @@ async def delete_file(filename: str, vision_mode: bool = False):
         vision_system.delete_file(filename)
     else:
         rag_system.delete_file(filename)
-        file_path = os.path.join(UPLOAD_DIR, filename)
-        if os.path.exists(file_path):
-            try:
-                os.remove(file_path)
-                logger.info(f"Deleted physical file: {file_path}")
-            except Exception as e:
-                logger.error(f"Cannot delete physical file {filename}: {e}")
+
+    file_path = os.path.join(UPLOAD_DIR, filename)
+    if os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+            logger.info(f"Deleted physical file: {file_path}")
+        except Exception as e:
+            logger.error(f"Cannot delete physical file {filename}: {e}")
 
     return {"status": "ok", "message": f"Deleted {filename}"}
 
@@ -159,6 +160,11 @@ async def upload_files(
         # Check duplicate
         if file_name in existing_db_files:
             results.append({"name": file_name, "status": "skipped", "message": "File already exists"})
+            continue
+
+        # Images are not supported in vision mode (PDF only)
+        if file_ext in ['.png', '.jpg', '.jpeg'] and vision_mode:
+            results.append({"name": file_name, "status": "error", "message": "Vision Mode supports PDF only"})
             continue
 
         # Image without OCR
