@@ -1,11 +1,12 @@
 import io
 import os
+import base64
 import logging
 from pathlib import Path
 from typing import List, Optional, Callable
 
 import fitz  # pymupdf
-import replicate
+from groq import Groq
 from PIL import Image
 from sentence_transformers import SentenceTransformer
 import chromadb
@@ -13,7 +14,7 @@ import chromadb
 logger = logging.getLogger(__name__)
 
 CLIP_MODEL = 'sentence-transformers/clip-ViT-B-32-multilingual-v1'
-VLM_MODEL = 'yorickvp/llava-13b:80537f9eead1a5bfa72d5ac6ea6414379be41d4d4f6679fd776e9535d1eb58bb'
+VLM_MODEL = 'meta-llama/llama-3.2-11b-vision-preview'
 TOP_K = 3
 
 
@@ -216,11 +217,21 @@ class VisionRAG:
             "Respond in the same language as the question.\n\n"
             f"Question: {question}"
         )
-        output = replicate.run(
-            VLM_MODEL,
-            input={
-                "prompt": prompt,
-                "image": io.BytesIO(image_bytes),
-            },
+        img_b64 = base64.b64encode(image_bytes).decode('utf-8')
+        client = Groq()
+        completion = client.chat.completions.create(
+            model=VLM_MODEL,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{img_b64}"},
+                    },
+                    {"type": "text", "text": prompt},
+                ],
+            }],
+            temperature=0.1,
+            max_tokens=1024,
         )
-        return "".join(output)
+        return completion.choices[0].message.content
