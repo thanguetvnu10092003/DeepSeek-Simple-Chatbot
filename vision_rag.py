@@ -175,16 +175,20 @@ class VisionRAG:
         images = []
         for p in image_paths:
             img = Image.open(p).convert('RGB')
-            if img.width > max_width:
-                ratio = max_width / img.width
-                img = img.resize((max_width, int(img.height * ratio)), Image.LANCZOS)
             images.append(img)
 
-        target_w = images[0].width
-        total_h = sum(img.height for img in images)
+        target_w = min(max_width, max(img.width for img in images))
+        resized = []
+        for img in images:
+            if img.width != target_w:
+                ratio = target_w / img.width
+                img = img.resize((target_w, int(img.height * ratio)), Image.LANCZOS)
+            resized.append(img)
+
+        total_h = sum(img.height for img in resized)
         combined = Image.new('RGB', (target_w, total_h), (255, 255, 255))
         y = 0
-        for img in images:
+        for img in resized:
             combined.paste(img, (0, y))
             y += img.height
 
