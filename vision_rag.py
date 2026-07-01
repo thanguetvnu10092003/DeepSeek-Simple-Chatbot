@@ -12,8 +12,8 @@ import chromadb
 
 logger = logging.getLogger(__name__)
 
-CLIP_MODEL = 'clip-ViT-B-32'
-VLM_MODEL = 'yorickvp/llava-13b:b5f6212d032508382d61ff00469ddda3e32fd8a0755a17f3c9f58bb5de6d49ba'
+CLIP_MODEL = 'sentence-transformers/clip-ViT-B-32-multilingual-v1'
+VLM_MODEL = 'yorickvp/llava-13b:80537f9eead1a5bfa72d5ac6ea6414379be41d4d4f6679fd776e9535d1eb58bb'
 TOP_K = 3
 
 
