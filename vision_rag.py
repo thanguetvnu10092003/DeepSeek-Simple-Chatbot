@@ -14,7 +14,7 @@ import chromadb
 logger = logging.getLogger(__name__)
 
 CLIP_MODEL = 'sentence-transformers/clip-ViT-B-32-multilingual-v1'
-VLM_MODEL = 'llama-3.2-11b-vision-instruct'
+VLM_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'
 TOP_K = 3
 
 
