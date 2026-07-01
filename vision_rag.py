@@ -231,6 +231,6 @@ class VisionRAG:
                 ],
             }],
             temperature=0.1,
-            max_tokens=1024,
+            max_tokens=4096,
         )
         return completion.choices[0].message.content
