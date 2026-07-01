@@ -8,6 +8,7 @@
     let isProcessing = false;
     let selectedUploadFiles = [];
     let currentAbortController = null;
+    let visionMode = false;
 
     // ===== DOM Elements =====
     const $ = (sel) => document.querySelector(sel);
@@ -45,6 +46,9 @@
     const iconSun = btnThemeToggle ? btnThemeToggle.querySelector('.icon-sun') : null;
     const iconMoon = btnThemeToggle ? btnThemeToggle.querySelector('.icon-moon') : null;
     const hljsTheme = $('#hljs-theme');
+    const visionModeToggle = $('#vision-mode-toggle');
+    const ocrToggleLabel = $('#ocr-toggle-label');
+    const modeBadge = $('#mode-badge');
 
     // ===== Init =====
     async function init() {
@@ -96,6 +100,19 @@
                 setTheme(currentTheme === 'light' ? 'dark' : 'light');
             });
         }
+
+        // Vision Mode toggle
+        visionModeToggle.addEventListener('change', () => {
+            visionMode = visionModeToggle.checked;
+            // OCR toggle is irrelevant in vision mode
+            ocrToggleLabel.style.opacity = visionMode ? '0.4' : '1';
+            ocrToggleLabel.style.pointerEvents = visionMode ? 'none' : '';
+            // Update badge
+            modeBadge.textContent = visionMode ? 'Vision' : 'Text';
+            modeBadge.className = `mode-badge ${visionMode ? 'vision' : 'text'}`;
+            // Reload file list for the active mode
+            loadFiles();
+        });
 
         // New chat
         btnNewChat.addEventListener('click', newConversation);
@@ -436,7 +453,8 @@
                     message: message,
                     conversation_id: currentConvId,
                     selected_files: selectedFiles.length > 0 ? selectedFiles : null,
-                    use_agentic: agenticToggle.checked
+                    use_agentic: agenticToggle.checked,
+                    vision_mode: visionMode
                 }),
                 signal: currentAbortController.signal
             });
@@ -560,6 +578,7 @@
         const formData = new FormData();
         selectedUploadFiles.forEach(f => formData.append('files', f));
         formData.append('enable_ocr', ocrToggle.checked);
+        formData.append('vision_mode', visionMode);
 
         try {
             const res = await fetch('/api/upload', {
@@ -602,7 +621,7 @@
 
     async function loadFiles() {
         try {
-            const res = await fetch('/api/files');
+            const res = await fetch(`/api/files?vision_mode=${visionMode}`);
             const data = await res.json();
 
             // File list in sidebar
@@ -682,7 +701,7 @@
                             btn.innerHTML = '<span class="spinner" style="width: 14px; height: 14px; border-width: 2px;"></span>';
                             btn.disabled = true;
                             try {
-                                const response = await fetch(`/api/files/${encodeURIComponent(btn.dataset.file)}`, { method: 'DELETE' });
+                                const response = await fetch(`/api/files/${encodeURIComponent(btn.dataset.file)}?vision_mode=${visionMode}`, { method: 'DELETE' });
                                 if (response.ok) {
                                     loadFiles(); // Refresh UI
                                 } else {

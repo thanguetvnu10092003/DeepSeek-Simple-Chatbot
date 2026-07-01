@@ -49,6 +49,11 @@
                 </div>
                 <div class="upload-options">
                     <label class="toggle-label">
+                        <input type="checkbox" id="vision-mode-toggle">
+                        <span class="toggle-slider"></span>
+                        <span>Vision Mode</span>
+                    </label>
+                    <label class="toggle-label" id="ocr-toggle-label">
                         <input type="checkbox" id="ocr-toggle">
                         <span class="toggle-slider"></span>
                         <span>Paid OCR (~$0.001/page)</span>
@@ -106,6 +111,7 @@
                     </label>
                 </div>
                 <div class="header-title" id="header-title">New Chat</div>
+                <span class="mode-badge text" id="mode-badge">Text</span>
             </header>
 
             <!-- Chat messages -->
