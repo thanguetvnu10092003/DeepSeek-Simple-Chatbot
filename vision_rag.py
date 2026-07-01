@@ -206,14 +206,14 @@ class VisionRAG:
     @staticmethod
     def _call_vlm(image_bytes: bytes, question: str, metadatas: list) -> str:
         """Send combined page image to Replicate VLM, return text answer."""
-        page_refs = ", ".join(
-            f"page {m['page']} of {m['filename']}" for m in metadatas
-        )
+        pages = ", ".join(str(m['page']) for m in metadatas)
         prompt = (
-            "You are a document analysis assistant. "
-            f"The image shows the following document pages: {page_refs}. "
-            "Answer based ONLY on what is visible in the image. "
-            "Cite the page number for each claim.\n\n"
+            "You are an expert academic document analyst. "
+            f"The image contains pages {pages} from an academic thesis. "
+            "Analyze and evaluate all visual content you see — maps, charts, diagrams, graphs, satellite images, tables. "
+            "For each visual element: describe what it shows, evaluate its quality and effectiveness, and explain what conclusions can be drawn from it. "
+            "Be detailed and analytical, not just descriptive. "
+            "Respond in the same language as the question.\n\n"
             f"Question: {question}"
         )
         output = replicate.run(
