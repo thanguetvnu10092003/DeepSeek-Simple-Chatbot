@@ -21,6 +21,7 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
 from rag import LangChainPDFRAG
+from vision_rag import VisionRAG
 from chat_history import ChatHistoryManager
 
 # Setup logging
@@ -37,6 +38,7 @@ UPLOAD_DIR = "./uploads"
 
 # Initialize systems
 rag_system = LangChainPDFRAG()
+vision_system = VisionRAG()
 history_manager = ChatHistoryManager()
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -54,6 +56,7 @@ class ChatRequest(BaseModel):
     conversation_id: Optional[str] = None
     selected_files: Optional[List[str]] = None
     use_agentic: bool = True
+    vision_mode: bool = False
 
 
 class ConversationCreate(BaseModel):
@@ -72,31 +75,35 @@ async def serve_index():
 
 
 @app.get("/api/files")
-async def list_files():
+async def list_files(vision_mode: bool = False):
     """Danh sách files đã upload vào vectorstore và thông tin tồn tại vật lý"""
-    files = rag_system.get_all_files()
-    file_info = []
-    for f in files:
-        has_file = os.path.exists(os.path.join(UPLOAD_DIR, f))
-        file_info.append({"name": f, "hasPreview": has_file})
+    if vision_mode:
+        files = vision_system.get_all_files()
+        file_info = [{"name": f, "hasPreview": False} for f in files]
+    else:
+        files = rag_system.get_all_files()
+        file_info = []
+        for f in files:
+            has_file = os.path.exists(os.path.join(UPLOAD_DIR, f))
+            file_info.append({"name": f, "hasPreview": has_file})
     return {"files": file_info}
 
 
 @app.delete("/api/files/{filename}")
-async def delete_file(filename: str):
+async def delete_file(filename: str, vision_mode: bool = False):
     """Xóa file khỏi vectorstore và thư mục uploads"""
-    # 1. Xóa khỏi ChromaDB & BM25
-    rag_system.delete_file(filename)
-    
-    # 2. Xóa file vật lý
-    file_path = os.path.join(UPLOAD_DIR, filename)
-    if os.path.exists(file_path):
-        try:
-            os.remove(file_path)
-            logger.info(f"Deleted physical file: {file_path}")
-        except Exception as e:
-            logger.error(f"Cannot delete physical file {filename}: {e}")
-            
+    if vision_mode:
+        vision_system.delete_file(filename)
+    else:
+        rag_system.delete_file(filename)
+        file_path = os.path.join(UPLOAD_DIR, filename)
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+                logger.info(f"Deleted physical file: {file_path}")
+            except Exception as e:
+                logger.error(f"Cannot delete physical file {filename}: {e}")
+
     return {"status": "ok", "message": f"Deleted {filename}"}
 
 
@@ -133,11 +140,12 @@ async def delete_conversation(conv_id: str):
 @app.post("/api/upload")
 async def upload_files(
     files: List[UploadFile] = File(...),
-    enable_ocr: bool = Form(False)
+    enable_ocr: bool = Form(False),
+    vision_mode: bool = Form(False),
 ):
     """Upload và xử lý files"""
     results = []
-    existing_db_files = rag_system.get_all_files()
+    existing_db_files = vision_system.get_all_files() if vision_mode else rag_system.get_all_files()
 
     for upload_file in files:
         file_name = upload_file.filename
@@ -172,20 +180,29 @@ async def upload_files(
             start_time = time.time()
 
             if file_ext == '.pdf':
-                num_chunks, ocr_pages, skipped_pages = rag_system.add_pdf(temp_path, enable_ocr)
-                elapsed = time.time() - start_time
-
-                if num_chunks == 0:
-                    results.append({
-                        "name": file_name, "status": "warning",
-                        "message": f"OCR needed ({skipped_pages} scanned pages)"
-                    })
-                else:
+                if vision_mode:
+                    pages_indexed, pages_skipped = vision_system.add_pdf(temp_path)
+                    elapsed = time.time() - start_time
                     results.append({
                         "name": file_name, "status": "ok",
-                        "chunks": num_chunks, "ocr_pages": ocr_pages,
+                        "chunks": pages_indexed, "ocr_pages": 0,
                         "time": f"{elapsed:.1f}s"
                     })
+                else:
+                    num_chunks, ocr_pages, skipped_pages = rag_system.add_pdf(temp_path, enable_ocr)
+                    elapsed = time.time() - start_time
+
+                    if num_chunks == 0:
+                        results.append({
+                            "name": file_name, "status": "warning",
+                            "message": f"OCR needed ({skipped_pages} scanned pages)"
+                        })
+                    else:
+                        results.append({
+                            "name": file_name, "status": "ok",
+                            "chunks": num_chunks, "ocr_pages": ocr_pages,
+                            "time": f"{elapsed:.1f}s"
+                        })
 
             elif file_ext in ['.png', '.jpg', '.jpeg']:
                 # OCR image via Replicate
@@ -242,12 +259,14 @@ async def upload_files(
             # We don't delete the uploaded file so we can serve it later for preview.
             pass
 
-    all_files_raw = rag_system.get_all_files()
-    all_files = []
-    for f in all_files_raw:
-        has_file = os.path.exists(os.path.join(UPLOAD_DIR, f))
-        all_files.append({"name": f, "hasPreview": has_file})
-    
+    if vision_mode:
+        all_files = [{"name": f, "hasPreview": False} for f in vision_system.get_all_files()]
+    else:
+        all_files = []
+        for f in rag_system.get_all_files():
+            has_file = os.path.exists(os.path.join(UPLOAD_DIR, f))
+            all_files.append({"name": f, "hasPreview": has_file})
+
     return {"results": results, "all_files": all_files}
 
 
@@ -275,17 +294,30 @@ async def chat(request: ChatRequest):
     def generate():
         try:
             target_files = request.selected_files if request.selected_files else None
-            mode_label = "Agentic RAG" if request.use_agentic else "Traditional RAG"
+            if request.vision_mode:
+                mode_label = "Vision RAG"
+            elif request.use_agentic:
+                mode_label = "Agentic RAG"
+            else:
+                mode_label = "Traditional RAG"
 
             start_time = time.time()
             reasoning_steps = []
 
-            if request.use_agentic:
+            if request.vision_mode:
+                answer, sources = vision_system.query(
+                    message, target_files=target_files, history=messages[:-1]
+                )
+                reasoning_steps = []
+            elif request.use_agentic:
                 answer, sources, reasoning_steps = rag_system.query_agentic(
-                    message, target_files=target_files
+                    message, target_files=target_files, history=messages[:-1]
                 )
             else:
-                answer, sources = rag_system.query(message, target_files=target_files)
+                answer, sources = rag_system.query(
+                    message, target_files=target_files, history=messages[:-1]
+                )
+                reasoning_steps = []
 
             elapsed = time.time() - start_time
 
@@ -296,7 +328,8 @@ async def chat(request: ChatRequest):
                 response += "---\n**References:**\n"
                 file_sources = {}
                 for doc in sources[:15]:
-                    meta = doc.metadata
+                    # Vision mode returns plain dicts; text mode returns Document objects
+                    meta = doc if isinstance(doc, dict) else doc.metadata
                     fname = meta.get('filename', 'Unknown')
                     page = meta.get('page', 'N/A')
                     if fname not in file_sources:
