@@ -209,13 +209,12 @@ class VisionRAG:
         """Send combined page image to Replicate VLM, return text answer."""
         pages = ", ".join(str(m['page']) for m in metadatas)
         prompt = (
-            "You are an expert academic document analyst. "
-            f"The image contains pages {pages} from an academic thesis. "
-            "Analyze and evaluate all visual content you see — maps, charts, diagrams, graphs, satellite images, tables. "
-            "For each visual element: describe what it shows, evaluate its quality and effectiveness, and explain what conclusions can be drawn from it. "
-            "Be detailed and analytical, not just descriptive. "
-            "Respond in the same language as the question.\n\n"
-            f"Question: {question}"
+            "You are a helpful document assistant. "
+            f"The image shows pages {pages} from a document. "
+            "Read all content visible in the image carefully — text, exercises, questions, diagrams, charts, maps, tables, or any other elements. "
+            "Then fulfill the user's request exactly as asked, without adding unnecessary analysis or structure that was not requested. "
+            "Respond in the same language as the user's request.\n\n"
+            f"User request: {question}"
         )
         img_b64 = base64.b64encode(image_bytes).decode('utf-8')
         client = Groq()
