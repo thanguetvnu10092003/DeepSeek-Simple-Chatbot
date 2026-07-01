@@ -1,6 +1,5 @@
 import io
 import os
-import base64
 import logging
 from pathlib import Path
 from typing import List, Optional, Callable
@@ -14,7 +13,7 @@ import chromadb
 logger = logging.getLogger(__name__)
 
 CLIP_MODEL = 'clip-ViT-B-32'
-VLM_MODEL = 'meta/llama-3.2-11b-vision-instruct'
+VLM_MODEL = 'yorickvp/llava-13b:b5f6212d032508382d61ff00469ddda3e32fd8a0755a17f3c9f58bb5de6d49ba'
 TOP_K = 3
 
 
@@ -217,12 +216,11 @@ class VisionRAG:
             "Cite the page number for each claim.\n\n"
             f"Question: {question}"
         )
-        img_b64 = base64.b64encode(image_bytes).decode('utf-8')
         output = replicate.run(
             VLM_MODEL,
             input={
                 "prompt": prompt,
-                "image": f"data:image/png;base64,{img_b64}",
+                "image": io.BytesIO(image_bytes),
             },
         )
         return "".join(output)
