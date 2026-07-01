@@ -13,7 +13,7 @@ import chromadb
 
 logger = logging.getLogger(__name__)
 
-CLIP_MODEL = 'sentence-transformers/clip-ViT-B-32-multilingual-v1'
+CLIP_MODEL = 'jinaai/jina-clip-v2'
 VLM_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'
 TOP_K = 3
 
@@ -29,7 +29,7 @@ class VisionRAG:
         os.makedirs(self.pages_dir, exist_ok=True)
 
         logger.info(f"Loading CLIP model: {CLIP_MODEL}")
-        self.clip = SentenceTransformer(CLIP_MODEL)
+        self.clip = SentenceTransformer(CLIP_MODEL, trust_remote_code=True)
 
         self._chroma = chromadb.PersistentClient(path=persist_directory)
         self._collection = self._chroma.get_or_create_collection(
